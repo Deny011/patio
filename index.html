@@ -56,11 +56,41 @@
   #scan{flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#fff;text-align:center}
   #scan video{width:100%;max-height:60vh;border-radius:14px;background:#000}
   #scan button{padding:14px 28px;background:#fff;color:#000;font-weight:700}
+  .cab{display:flex;align-items:center;gap:10px}
+  #menuBtn{width:44px;height:44px;font-size:1.5rem;background:#fff;border:1px solid var(--linea);line-height:1}
+  #velo{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;z-index:20}
+  #drawer{position:fixed;top:0;bottom:0;left:0;width:78%;max-width:300px;background:#fff;z-index:21;padding:18px 14px;transform:translateX(-105%);transition:transform .2s}
+  #drawer.abierto{transform:none}
+  #drawer h3{margin:4px 8px 16px;font-size:1.1rem}
+  #drawer button{display:block;width:100%;text-align:left;padding:16px 12px;font-size:1.05rem;background:none;border-radius:10px}
+  #drawer button:active{background:var(--fondo)}
+  #drawer hr{border:0;border-top:1px solid var(--linea);margin:12px 0}
+  #drawer .peligro{color:#991b1b}
+  .chips{display:flex;gap:8px;margin-bottom:12px}
+  .chip{padding:8px 14px;background:#fff;border:1px solid var(--linea);border-radius:99px;font-size:.9rem}
+  .chip.sel{background:var(--verde);color:#fff;border-color:var(--verde)}
+  .tag{font-size:.75rem;font-weight:600;padding:2px 8px;border-radius:99px;margin-left:6px}
+  .tag.ab{background:#d1fae5;color:#065f46}.tag.ce{background:#e5e7eb;color:#4b5563}
+  .click{cursor:pointer}
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+  .stat{background:var(--fondo);border-radius:12px;padding:12px}
+  .stat b{display:block;font-size:1.4rem}
+  .volver{background:none;color:var(--verde);font-weight:600;padding:6px 0;margin-bottom:8px}
+  .sec2{width:100%;padding:14px;margin-top:10px;font-weight:600;background:#fff;color:var(--verde);border:2px solid var(--verde)}
   #aviso{position:fixed;left:16px;right:16px;bottom:16px;background:var(--verde);color:#fff;padding:14px;border-radius:12px;text-align:center;font-weight:600;display:none;max-width:488px;margin-inline:auto;z-index:10}
 </style>
 </head>
 <body>
-<header><h1>Patio</h1><span id="estado"></span></header>
+<header><div class="cab"><button id="menuBtn" aria-label="Menú">☰</button><h1>Patio</h1></div><span id="estado"></span></header>
+
+<div id="velo"></div>
+<nav id="drawer">
+  <h3>Patio</h3>
+  <button id="mInicio">🏠 Inicio</button>
+  <button id="mBarcos">🚢 Barcos</button>
+  <hr>
+  <button id="mBorrar" class="peligro">🗑 Borrar datos de prueba</button>
+</nav>
 
 <div id="home">
   <button id="agregar">Agregar vehículo</button>
@@ -108,6 +138,22 @@
   <button id="cancelarBarco" class="cancelar">Cancelar</button>
 </section>
 
+<section id="pBarcos" class="secc">
+  <h2 style="font-size:1.2rem">Barcos</h2>
+  <input type="text" id="buscarBarco" placeholder="Buscar por código o tipo" autocomplete="off">
+  <div class="chips" id="chips">
+    <button class="chip sel" data-f="todos">Todos</button>
+    <button class="chip" data-f="abiertos">Abiertos</button>
+    <button class="chip" data-f="cerrados">Cerrados</button>
+  </div>
+  <div id="listaBarcos" class="caja" style="margin-top:0"></div>
+</section>
+
+<section id="pDetalle" class="secc">
+  <button class="volver" id="volverBarcos">← Barcos</button>
+  <div id="detalle"></div>
+</section>
+
 <div id="scan">
   <p>Apunta al código de barras</p>
   <video id="video" playsinline muted></video>
@@ -141,9 +187,14 @@ function guardarBarco(reg){return new Promise((ok,mal)=>{
   const rq=t.objectStore('barcos').add(reg);
   t.oncomplete=()=>ok(rq.result);t.onerror=()=>mal(t.error);
 });}
-function cerrarBarcoDB(bid){return new Promise((ok,mal)=>{
+function estadoBarcoDB(bid,abierto){return new Promise((ok,mal)=>{
   const t=db.transaction('barcos','readwrite'),st=t.objectStore('barcos');
-  st.get(bid).onsuccess=e=>{const b=e.target.result;if(b){b.abierto=false;b.cierre=new Date().toISOString();b.sincronizado=false;st.put(b);}};
+  st.get(bid).onsuccess=e=>{const b=e.target.result;if(b){b.abierto=abierto;b.cierre=abierto?null:new Date().toISOString();b.sincronizado=false;st.put(b);}};
+  t.oncomplete=ok;t.onerror=()=>mal(t.error);
+});}
+function borrarTodoDB(){return new Promise((ok,mal)=>{
+  const t=db.transaction(['vehiculos','barcos','meta'],'readwrite');
+  ['vehiculos','barcos','meta'].forEach(n=>t.objectStore(n).clear());
   t.oncomplete=ok;t.onerror=()=>mal(t.error);
 });}
 
@@ -164,7 +215,7 @@ function guardarVehiculo(b,tarifa,foto){return new Promise((ok,mal)=>{
 
 // ---------- Utilidades de pantalla ----------
 function aviso(t){const a=$('aviso');a.textContent=t;a.style.display='block';clearTimeout(aviso.t);aviso.t=setTimeout(()=>a.style.display='none',2800);}
-function mostrar(id){['home','formVeh','formBarco'].forEach(x=>{
+function mostrar(id){['home','formVeh','formBarco','pBarcos','pDetalle'].forEach(x=>{
   const e=$(x);e.style.display=x===id?'block':'none';});window.scrollTo(0,0);}
 function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e;}
 function nombreBarco(b){return b.tipo+' · '+(b.codigoBarras||b.codigoNum||'sin código');}
@@ -317,7 +368,7 @@ async function pintar(){
   for(const b of abiertos){
     const mios=v.filter(x=>x.barcoId===b.bid);
     const t=el('div','tarjeta');
-    const izq=el('div');
+    const izq=el('div','click');izq.onclick=()=>verDetalle(b.bid);
     izq.appendChild(el('b','',b.tipo));
     izq.appendChild(el('small','','Código: '+(b.codigoBarras||'—')+(b.codigoNum?' · Nº '+b.codigoNum:'')));
     izq.appendChild(el('small','',mios.length+' vehículos · '+rd(mios.reduce((s,x)=>s+x.tarifa,0))));
@@ -325,7 +376,7 @@ async function pintar(){
     const c=el('button','cerrar','Cerrar');
     c.onclick=async()=>{
       if(confirm('¿Cerrar el barco '+nombreBarco(b)+'? Ya no podrás agregarle vehículos.')){
-        await cerrarBarcoDB(b.bid);aviso('Barco cerrado');await pintar();}
+        await estadoBarcoDB(b.bid,false);aviso('Barco cerrado');await pintar();}
     };
     t.appendChild(c);ab.appendChild(t);
   }
@@ -334,24 +385,116 @@ async function pintar(){
   urls.forEach(u=>URL.revokeObjectURL(u));urls=[];
   const ul=$('lista');ul.innerHTML='';
   if(!v.length){ul.appendChild(el('div','vacio','Aún no hay registros. Pulsa «Agregar vehículo».'));return;}
-  for(const x of v.slice(0,20)){
-    const li=el('li');
-    const f=new Date(x.fecha).toLocaleString('es-DO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
-    const izq=el('div','izq');
-    if(x.foto){
-      const u=URL.createObjectURL(x.foto);urls.push(u);
-      const im=el('img');im.src=u;im.alt='Foto '+x.id;
-      im.onclick=()=>{$('visorImg').src=u;$('visor').style.display='flex';};
-      izq.appendChild(im);
-    }
-    const tx=el('div');
-    tx.appendChild(el('b','',x.id));
-    tx.append(' · '+x.barco+(x.codigo?' · '+x.codigo:''));
-    tx.appendChild(el('small','',f));
-    izq.appendChild(tx);li.appendChild(izq);
-    li.appendChild(el('b','',rd(x.tarifa)));
-    ul.appendChild(li);
+  for(const x of v.slice(0,20))ul.appendChild(filaVeh(x,true));
+}
+
+function fmt(iso){return new Date(iso).toLocaleString('es-DO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}
+function filaVeh(x,conBarco){
+  const li=el('li');
+  const izq=el('div','izq');
+  if(x.foto){
+    const u=URL.createObjectURL(x.foto);urls.push(u);
+    const im=el('img');im.src=u;im.alt='Foto '+x.id;
+    im.onclick=()=>{$('visorImg').src=u;$('visor').style.display='flex';};
+    izq.appendChild(im);
   }
+  const tx=el('div');
+  tx.appendChild(el('b','',x.id));
+  if(conBarco)tx.append(' · '+x.barco+(x.codigo?' · '+x.codigo:''));
+  tx.appendChild(el('small','',fmt(x.fecha)));
+  izq.appendChild(tx);li.appendChild(izq);
+  li.appendChild(el('b','',rd(x.tarifa)));
+  return li;
+}
+
+// ---------- Menú ----------
+function abrirMenu(){$('velo').style.display='block';$('drawer').classList.add('abierto');}
+function cerrarMenu(){$('velo').style.display='none';$('drawer').classList.remove('abierto');}
+$('menuBtn').onclick=abrirMenu;$('velo').onclick=cerrarMenu;
+$('mInicio').onclick=async()=>{cerrarMenu();mostrar('home');await pintar();};
+$('mBarcos').onclick=async()=>{cerrarMenu();filtro='todos';$('buscarBarco').value='';marcarChip();mostrar('pBarcos');await pintarBarcos();};
+$('mBorrar').onclick=async()=>{
+  cerrarMenu();
+  const r=prompt('Esto borra TODOS los vehículos, fotos y barcos, y el contador vuelve a C1. No se puede deshacer.\n\nEscribe BORRAR para confirmar:');
+  if(r===null)return;
+  if(r.trim().toUpperCase()!=='BORRAR'){aviso('No se borró nada');return;}
+  await borrarTodoDB();mostrar('home');await pintar();aviso('Todo borrado. El próximo vehículo será C1');
+};
+
+// ---------- Lista de barcos y detalle ----------
+let filtro='todos';
+function marcarChip(){document.querySelectorAll('#chips .chip').forEach(c=>c.classList.toggle('sel',c.dataset.f===filtro));}
+document.querySelectorAll('#chips .chip').forEach(c=>c.onclick=()=>{filtro=c.dataset.f;marcarChip();pintarBarcos();});
+$('buscarBarco').oninput=()=>pintarBarcos();
+$('volverBarcos').onclick=async()=>{mostrar('pBarcos');await pintarBarcos();};
+
+async function pintarBarcos(){
+  const v=await todos('vehiculos');
+  let bs=(await todos('barcos')).sort((a,b)=>b.bid-a.bid);
+  const q=$('buscarBarco').value.trim().toLowerCase();
+  if(filtro==='abiertos')bs=bs.filter(b=>b.abierto);
+  if(filtro==='cerrados')bs=bs.filter(b=>!b.abierto);
+  if(q)bs=bs.filter(b=>(b.tipo+' '+b.codigoBarras+' '+b.codigoNum).toLowerCase().includes(q));
+  const c=$('listaBarcos');c.innerHTML='';
+  if(!bs.length){c.appendChild(el('div','vacio','No hay barcos que coincidan.'));return;}
+  for(const b of bs){
+    const mios=v.filter(x=>x.barcoId===b.bid);
+    const t=el('div','tarjeta click');
+    const izq=el('div');
+    const l1=el('b','',b.tipo);
+    l1.appendChild(el('span','tag '+(b.abierto?'ab':'ce'),b.abierto?'Abierto':'Cerrado'));
+    izq.appendChild(l1);
+    izq.appendChild(el('small','','Código: '+(b.codigoBarras||'—')+(b.codigoNum?' · Nº '+b.codigoNum:'')));
+    izq.appendChild(el('small','',mios.length+' vehículos · '+rd(mios.reduce((s,x)=>s+x.tarifa,0))));
+    t.appendChild(izq);
+    t.appendChild(el('small','',fmt(b.fecha)));
+    t.onclick=()=>verDetalle(b.bid);
+    c.appendChild(t);
+  }
+}
+
+async function verDetalle(bid){
+  const b=(await todos('barcos')).find(x=>x.bid===bid);if(!b)return;
+  const v=(await todos('vehiculos')).filter(x=>x.barcoId===bid).sort((a,b)=>b.num-a.num);
+  urls.forEach(u=>URL.revokeObjectURL(u));urls=[];
+  const d=$('detalle');d.innerHTML='';
+  const caja=el('div','caja');caja.style.marginTop='0';
+  const h=el('h2','',b.tipo);h.style.fontSize='1.3rem';
+  h.appendChild(el('span','tag '+(b.abierto?'ab':'ce'),b.abierto?'Abierto':'Cerrado'));
+  caja.appendChild(h);
+  caja.appendChild(el('small','','Código de barras: '+(b.codigoBarras||'—')));
+  caja.appendChild(el('br'));
+  caja.appendChild(el('small','','Código numérico: '+(b.codigoNum||'—')));
+  caja.appendChild(el('br'));
+  caja.appendChild(el('small','','Abierto: '+fmt(b.fecha)+(b.cierre?' · Cerrado: '+fmt(b.cierre):'')));
+  const st=el('div','stats');
+  const total=v.reduce((s,x)=>s+x.tarifa,0);
+  const a=el('div','stat');a.appendChild(el('b','',String(v.length)));a.appendChild(el('span','','vehículos'));
+  const m=el('div','stat');m.appendChild(el('b','',rd(total)));m.appendChild(el('span','','total'));
+  st.appendChild(a);st.appendChild(m);caja.appendChild(st);
+  // desglose por tarifa (ej. Sucha: RD$200 × 3, RD$400 × 2)
+  const g={};v.forEach(x=>g[x.tarifa]=(g[x.tarifa]||0)+1);
+  const claves=Object.keys(g).sort((x,y)=>x-y);
+  if(claves.length)caja.appendChild(el('p','',claves.map(k=>g[k]+' × '+rd(Number(k))+' = '+rd(g[k]*k)).join('  ·  ')));
+  const bt=el('button','sec2',b.abierto?'Cerrar barco':'Reabrir barco');
+  bt.onclick=async()=>{
+    if(b.abierto){
+      if(!confirm('¿Cerrar el barco '+nombreBarco(b)+'?'))return;
+      await estadoBarcoDB(bid,false);aviso('Barco cerrado');
+    }else{
+      const dup=(await todos('barcos')).find(o=>o.abierto&&o.bid!==bid&&((b.codigoBarras&&o.codigoBarras===b.codigoBarras)||(b.codigoNum&&o.codigoNum===b.codigoNum)));
+      if(dup){aviso('Ya hay otro barco abierto con ese código');return;}
+      await estadoBarcoDB(bid,true);aviso('Barco reabierto');
+    }
+    await verDetalle(bid);
+  };
+  caja.appendChild(bt);d.appendChild(caja);
+  d.appendChild(el('h2','','Vehículos de este barco')).style.margin='20px 0 4px';
+  const ul=el('ul');
+  if(!v.length)ul.appendChild(el('div','vacio','Todavía no tiene vehículos.'));
+  v.forEach(x=>ul.appendChild(filaVeh(x,false)));
+  d.appendChild(ul);
+  mostrar('pDetalle');
 }
 
 function estado(){const e=$('estado');e.textContent=navigator.onLine?'Con internet':'Sin internet';e.className=navigator.onLine?'on':'off';}
