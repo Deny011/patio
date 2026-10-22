@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#14532d">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<title>Patio</title>
+<style>
+  body{margin:0;font-family:system-ui,sans-serif;background:#f3f4f1;color:#1a1a1a;display:flex;min-height:100vh;align-items:center;justify-content:center;text-align:center;padding:24px;box-sizing:border-box}
+  h1{font-size:2rem;margin:0 0 8px}
+  p{margin:4px 0;color:#444}
+  #estado{margin-top:20px;font-weight:600;padding:10px 16px;border-radius:10px;display:inline-block}
+  .on{background:#d1fae5;color:#065f46}
+  .off{background:#fee2e2;color:#991b1b}
+</style>
+</head>
+<body>
+<main>
+  <h1>Patio</h1>
+  <p>Control de vehículos movidos</p>
+  <p>Paso 1: instalación lista</p>
+  <div id="estado"></div>
+</main>
+<script>
+  function estado(){
+    const e=document.getElementById('estado');
+    e.textContent=navigator.onLine?'Con internet':'Sin internet (funciona igual)';
+    e.className=navigator.onLine?'on':'off';
+  }
+  addEventListener('online',estado);addEventListener('offline',estado);estado();
+  if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js');}
+</script>
+</body>
+</html>
