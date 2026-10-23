@@ -112,7 +112,6 @@
 </nav>
 
 <div id="home">
-  <div id="avisoResp" class="click" style="display:none;background:#fef3c7;color:#92400e;border-radius:12px;padding:12px;margin-bottom:12px;font-weight:600"></div>
   <button id="agregar">Agregar vehículo</button>
   <button id="nuevoBarco">+ Nuevo barco</button>
   <button id="btnGaseo" class="sec2">Registrar gaseo</button>
@@ -158,6 +157,18 @@
   <input type="text" id="codNum" inputmode="numeric" autocomplete="off">
   <button id="guardarBarco" class="principal">Guardar barco</button>
   <button id="cancelarBarco" class="cancelar">Cancelar</button>
+</section>
+
+<section id="pActivar" class="caja secc" style="text-align:center">
+  <h2 style="font-size:1.3rem">Activar Patio</h2>
+  <p style="color:var(--gris)">Para usar la app necesitas un código de activación. Mándale este código a quien te compartió la app:</p>
+  <div id="miCodigo" style="font-size:2rem;font-weight:800;letter-spacing:.08em;margin:10px 0"></div>
+  <button id="copiarCodigo" class="sec2" style="margin-top:0">Copiar mi código</button>
+  <button id="compartirCodigo" class="sec2" style="display:none">Compartir mi código</button>
+  <label for="codAct" style="text-align:left;margin-top:20px">Código de activación</label>
+  <textarea id="codAct" rows="4" autocomplete="off" placeholder="Pega aquí el código que te mandaron" style="width:100%;padding:12px;font-size:.95rem;border:2px solid var(--linea);border-radius:12px;background:#fff;margin-bottom:8px;font-family:monospace"></textarea>
+  <p id="errAct" style="color:#991b1b;font-weight:600;margin:0 0 10px"></p>
+  <button id="activar" class="principal">Activar</button>
 </section>
 
 <section id="pEditVeh" class="caja secc">
@@ -363,7 +374,7 @@ function guardarVehiculo(b,tarifa,foto,mini,chasis){return new Promise((ok,mal)=
 
 // ---------- Utilidades de pantalla ----------
 function aviso(t){const a=$('aviso');a.textContent=t;a.style.display='block';clearTimeout(aviso.t);aviso.t=setTimeout(()=>a.style.display='none',2800);}
-function mostrar(id){pantallaActual=id;['home','formVeh','formBarco','pBarcos','pDetalle','formGaseo','pHist','pResp','pConfig','pEditTipo','pMes','pEditVeh'].forEach(x=>{
+function mostrar(id){pantallaActual=id;['home','formVeh','formBarco','pBarcos','pDetalle','formGaseo','pHist','pResp','pConfig','pEditTipo','pMes','pEditVeh','pActivar'].forEach(x=>{
   const e=$(x);e.style.display=x===id?'block':'none';});window.scrollTo(0,0);}
 function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e;}
 function nombreBarco(b){return b.tipo+' · '+(b.codigoBarras||b.codigoNum||'sin código');}
@@ -527,14 +538,6 @@ async function pintar(){
   const bs=(await todos('barcos')).sort((a,b)=>b.bid-a.bid);
   abiertos=bs.filter(b=>b.abierto);
   const g=await todos('gaseos');
-  {
-    const ult=await getMeta('ultimoRespaldo');
-    const pend=v.filter(x=>!ult||(x.editadoEn||x.fecha)>ult).length+g.filter(y=>!ult||y.fecha>ult).length;
-    const dd=ult?Math.floor((Date.now()-new Date(ult).getTime())/86400000):null;
-    const ar=$('avisoResp');
-    if(pend>0&&(!ult||dd>=7||pend>=50)){ar.style.display='block';ar.textContent='⚠ '+(ult?'Último respaldo hace '+dd+(dd===1?' día':' días'):'Aún no has hecho respaldo')+' · '+pend+' sin respaldar. Toca aquí.';}
-    else ar.style.display='none';
-  }
   const rs=resumenDia(v,g,claveDia(new Date().toISOString()));
   const rc=$('resumen');rc.innerHTML='';
   const tt=el('div');tt.appendChild(el('b','','Hoy'));tt.append(' · '+rs.n+(rs.n===1?' vehículo':' vehículos'));rc.appendChild(tt);
@@ -702,6 +705,54 @@ async function pintarHist(){
     m.onclick=async()=>{diasMostrados+=7;await pintarHist();};c.appendChild(m);
   }
 }
+
+// ---------- Activación por teléfono ----------
+// Pega aquí tu clave pública (la que te muestra el generador de códigos). Si está en null, la app no pide activación.
+const CLAVE_PUBLICA='BCRQDhdXhc3O82C2-_Uwh9Z95vjUVwUoSL-8G-HnkZCPgTLqDH440ToESs8ziEZRp4R2gl1rHpHfj0ai0WSTD_0';
+// Códigos de teléfono bloqueados (opcional): ['ABCD-2345']
+const BLOQUEADOS=[];
+let deviceId='';
+function b64uADatos(t){t=t.replace(/-/g,'+').replace(/_/g,'/');while(t.length%4)t+='=';const b=atob(t),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u;}
+function nuevoDeviceId(){const al='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';const r=crypto.getRandomValues(new Uint8Array(8));let t='';for(const x of r)t+=al[x%32];return t.slice(0,4)+'-'+t.slice(4);}
+async function codigoValido(codigo,id){
+  try{
+    const [p,f]=codigo.replace(/\s+/g,'').split('.');
+    const datos=b64uADatos(p);
+    const clave=await crypto.subtle.importKey('raw',b64uADatos(CLAVE_PUBLICA),{name:'ECDSA',namedCurve:'P-256'},false,['verify']);
+    if(!(await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},clave,b64uADatos(f),datos)))return null;
+    const d=JSON.parse(new TextDecoder().decode(datos));
+    return d.d===id?d:null;
+  }catch(e){return null;}
+}
+async function verificarActivacion(){
+  if(!CLAVE_PUBLICA)return true;
+  let id=await getMeta('deviceId');
+  if(!id){id=nuevoDeviceId();await setMeta('deviceId',id);}
+  deviceId=id;
+  if(BLOQUEADOS.includes(id))return false;
+  const cod=await getMeta('activacion');
+  return !!(cod&&await codigoValido(cod,id));
+}
+function mostrarActivacion(){
+  document.querySelector('header').style.display='none';
+  $('miCodigo').textContent=deviceId;
+  $('compartirCodigo').style.display=navigator.share?'block':'none';
+  mostrar('pActivar');
+}
+$('copiarCodigo').onclick=async()=>{
+  try{await navigator.clipboard.writeText(deviceId);aviso('Código copiado');}
+  catch(e){aviso('Cópialo a mano: '+deviceId);}
+};
+$('compartirCodigo').onclick=()=>{navigator.share({text:'Mi código de Patio: '+deviceId}).catch(()=>{});};
+$('activar').onclick=async()=>{
+  const cod=$('codAct').value.trim();
+  const d=cod?await codigoValido(cod,deviceId):null;
+  if(!d){$('errAct').textContent='Ese código no sirve en este teléfono. Revisa que lo copiaste completo, o pídelo de nuevo.';return;}
+  await setMeta('activacion',cod);$('errAct').textContent='';
+  if(!cfg.chofer&&d.n){cfg.chofer=d.n;await guardarConfig();pintarQuien();}
+  document.querySelector('header').style.display='';
+  mostrar('home');await pintar();aviso('Activado'+(d.n?' para '+d.n:''));
+};
 
 // ---------- Editar o borrar un vehículo ----------
 let ev=null,evUrl=null,volverEdit='home';
@@ -1098,7 +1149,6 @@ async function pintarResp(){
 }
 async function abrirResp(){respaldoListo=null;mostrar('pResp');await pintarResp();}
 $('mResp').onclick=()=>{cerrarMenu();abrirResp();};
-$('avisoResp').onclick=abrirResp;
 $('volverInicio2').onclick=async()=>{mostrar('home');await pintar();};
 async function conOcupado(boton,texto,fn){
   if(ocupado)return;ocupado=true;const t0=boton.textContent;boton.textContent=texto;boton.disabled=true;
@@ -1150,7 +1200,8 @@ $('archivoResp').onchange=async e=>{
     const cfgNuevo=normalizarCfg(data.config)||cfg;
     await new Promise((ok,mal)=>{
       const t=db.transaction(['vehiculos','barcos','gaseos','meta'],'readwrite');
-      ['vehiculos','barcos','gaseos','meta'].forEach(n=>t.objectStore(n).clear());
+      ['vehiculos','barcos','gaseos'].forEach(n=>t.objectStore(n).clear());
+      t.objectStore('meta').delete('contador');t.objectStore('meta').delete('ultimoRespaldo');
       vs.forEach(x=>t.objectStore('vehiculos').put(x));
       (data.barcos||[]).forEach(b=>t.objectStore('barcos').put(b));
       (data.gaseos||[]).forEach(y=>t.objectStore('gaseos').put(y));
@@ -1292,7 +1343,7 @@ async function verDetalle(bid,desde){
 function estado(){const e=$('estado');e.textContent=navigator.onLine?'Con internet':'Sin internet';e.className=navigator.onLine?'on':'off';}
 addEventListener('online',estado);addEventListener('offline',estado);estado();
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js');}
-abrirDB().then(cargarConfig).then(pintar);
+abrirDB().then(cargarConfig).then(async()=>{if(await verificarActivacion())await pintar();else mostrarActivacion();});
 if(navigator.storage&&navigator.storage.persist){navigator.storage.persist().catch(()=>{});}
 </script>
 </body>
