@@ -84,6 +84,8 @@
   .dia{margin-top:22px;padding-bottom:6px;border-bottom:2px solid var(--verde)}
   .dia b{font-size:1.05rem;text-transform:capitalize}
   .borrar{background:none;color:#991b1b;text-decoration:underline;padding:6px 0 6px 12px}
+  .montosGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
+  .peligro2{width:100%;padding:12px;margin-top:6px;background:none;color:#991b1b;text-decoration:underline}
   #aviso{position:fixed;left:16px;right:16px;bottom:16px;background:var(--verde);color:#fff;padding:14px;border-radius:12px;text-align:center;font-weight:600;display:none;max-width:488px;margin-inline:auto;z-index:10}
 </style>
 </head>
@@ -96,6 +98,7 @@
   <button id="mInicio">🏠 Inicio</button>
   <button id="mHist">📅 Historial</button>
   <button id="mResp">💾 Respaldo</button>
+  <button id="mConfig">⚙ Configuración</button>
   <hr>
   <button id="mBorrar" class="peligro">🗑 Borrar datos de prueba</button>
 </nav>
@@ -120,10 +123,7 @@
   <div class="opciones" id="opsBarco"></div>
   <div id="sucha" style="display:none">
     <h2>¿Cuánto?</h2>
-    <div class="fila" id="montos">
-      <button class="op" data-m="200">RD$200</button>
-      <button class="op" data-m="400">RD$400</button>
-    </div>
+    <div class="montosGrid" id="montos"></div>
     <div style="height:14px"></div>
   </div>
   <p class="tarifa" id="tarifa"></p>
@@ -152,6 +152,40 @@
   <button id="cancelarBarco" class="cancelar">Cancelar</button>
 </section>
 
+<section id="pConfig" class="secc">
+  <button class="volver" id="volverInicio3">← Inicio</button>
+  <h2 style="font-size:1.2rem">Configuración</h2>
+  <div class="caja" style="margin-top:0">
+    <h2>Tipos de trabajo (barcos)</h2>
+    <p style="color:var(--gris);margin:0 0 6px">Toca uno para cambiar su nombre o su tarifa.</p>
+    <div id="listaTipos"></div>
+    <button id="nuevoTipo" class="sec2">+ Agregar tipo</button>
+  </div>
+  <div class="caja">
+    <h2>Montos rápidos del gaseo</h2>
+    <label for="gaseoMontosIn">Sepáralos con coma (sin comas en los miles)</label>
+    <input type="text" id="gaseoMontosIn" placeholder="500, 1000, 1200" autocomplete="off">
+    <p id="gaseoPrev" style="color:var(--gris);margin:0 0 12px"></p>
+    <button id="guardarGaseoMontos" class="principal">Guardar montos</button>
+  </div>
+</section>
+
+<section id="pEditTipo" class="caja secc">
+  <h2 id="editTitulo" style="font-size:1.2rem"></h2>
+  <label for="tNombre">Nombre</label>
+  <input type="text" id="tNombre" maxlength="30" autocomplete="off">
+  <label>Tarifa</label>
+  <div class="fila"><button class="op" id="tFija">Fija</button><button class="op" id="tVarias">Elegir entre varias</button></div>
+  <div style="height:12px"></div>
+  <div id="boxFija"><label for="tMonto">Monto por vehículo (RD$)</label><input type="number" id="tMonto" inputmode="numeric" min="1"></div>
+  <div id="boxVarias" style="display:none"><label for="tOpciones">Montos posibles (separados por coma, sin comas en los miles)</label><input type="text" id="tOpciones" placeholder="200, 400" autocomplete="off"><p id="tPrev" style="color:var(--gris);margin:-6px 0 12px"></p></div>
+  <p style="color:var(--gris);font-size:.9rem">Los vehículos ya registrados conservan su tarifa de antes. El cambio aplica solo a los nuevos.</p>
+  <button id="guardarTipo" class="principal">Guardar</button>
+  <button id="ocultarTipo" class="sec2"></button>
+  <button id="borrarTipo" class="peligro2">Eliminar este tipo</button>
+  <button id="cancelarTipo" class="cancelar">Cancelar</button>
+</section>
+
 <section id="pResp" class="secc">
   <button class="volver" id="volverInicio2">← Inicio</button>
   <h2 style="font-size:1.2rem">Respaldo</h2>
@@ -176,13 +210,7 @@
   <label for="gFecha">Fecha</label>
   <input type="date" id="gFecha" style="width:100%;padding:14px;font-size:1.05rem;border:2px solid var(--linea);border-radius:12px;background:#fff;margin-bottom:14px">
   <h2>¿Cuánto pagan?</h2>
-  <div class="grid3" id="montosG">
-    <button class="op" data-m="500">RD$500</button>
-    <button class="op" data-m="1000">RD$1,000</button>
-    <button class="op" data-m="1100">RD$1,100</button>
-    <button class="op" data-m="1200">RD$1,200</button>
-    <button class="op" data-m="1500">RD$1,500</button>
-  </div>
+  <div class="grid3" id="montosG"></div>
   <label for="gMonto">Otro monto</label>
   <input type="number" id="gMonto" inputmode="numeric" min="0" placeholder="Escribe el monto">
   <button id="guardarGaseo" class="principal" disabled>Guardar gaseo</button>
@@ -228,7 +256,8 @@
 <script>
 const $=id=>document.getElementById(id);
 const rd=n=>'RD$'+n.toLocaleString('es-DO');
-const TARIFAS={'Auto Prestige':71,'Ferry':91,'Sucha':null};
+const CFG_DEFECTO={tipos:[{nombre:'Auto Prestige',tarifa:71,opciones:[],activo:true},{nombre:'Ferry',tarifa:91,opciones:[],activo:true},{nombre:'Sucha',tarifa:null,opciones:[200,400],activo:true}],gaseoMontos:[500,1000,1100,1200,1500]};
+let cfg=JSON.parse(JSON.stringify(CFG_DEFECTO));
 let db,barcoSel=null,monto=null,foto=null,fotoMini=null,visorUrl=null,tipoNuevo=null,urls=[],abiertos=[];
 
 // ---------- Base de datos local (IndexedDB) ----------
@@ -266,7 +295,8 @@ function borrarGaseoDB(gid){return new Promise((ok,mal)=>{
 });}
 function borrarTodoDB(){return new Promise((ok,mal)=>{
   const t=db.transaction(['vehiculos','barcos','meta','gaseos'],'readwrite');
-  ['vehiculos','barcos','meta','gaseos'].forEach(n=>t.objectStore(n).clear());
+  ['vehiculos','barcos','gaseos'].forEach(n=>t.objectStore(n).clear());
+  t.objectStore('meta').delete('contador');t.objectStore('meta').delete('ultimoRespaldo');
   t.oncomplete=ok;t.onerror=()=>mal(t.error);
 });}
 
@@ -287,7 +317,7 @@ function guardarVehiculo(b,tarifa,foto,mini,chasis){return new Promise((ok,mal)=
 
 // ---------- Utilidades de pantalla ----------
 function aviso(t){const a=$('aviso');a.textContent=t;a.style.display='block';clearTimeout(aviso.t);aviso.t=setTimeout(()=>a.style.display='none',2800);}
-function mostrar(id){['home','formVeh','formBarco','pBarcos','pDetalle','formGaseo','pHist','pResp'].forEach(x=>{
+function mostrar(id){['home','formVeh','formBarco','pBarcos','pDetalle','formGaseo','pHist','pResp','pConfig','pEditTipo'].forEach(x=>{
   const e=$(x);e.style.display=x===id?'block':'none';});window.scrollTo(0,0);}
 function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e;}
 function nombreBarco(b){return b.tipo+' · '+(b.codigoBarras||b.codigoNum||'sin código');}
@@ -341,17 +371,19 @@ function dibujarOpsBarco(conteo){
   }
 }
 function elegirBarco(b){
-  barcoSel=b;monto=TARIFAS[b.tipo];
+  const tc=cfgTipo(b.tipo);
+  barcoSel=b;monto=tc.tarifa;
   document.querySelectorAll('#opsBarco .op').forEach(x=>x.classList.toggle('sel',Number(x.dataset.bid)===b.bid));
-  $('sucha').style.display=b.tipo==='Sucha'?'block':'none';
-  document.querySelectorAll('#montos .op').forEach(x=>x.classList.remove('sel'));
+  const varias=tc.tarifa==null;
+  $('sucha').style.display=varias?'block':'none';
+  const m=$('montos');m.innerHTML='';
+  if(varias)tc.opciones.forEach(o=>{
+    const x=el('button','op',rd(o));
+    x.onclick=()=>{monto=o;m.querySelectorAll('.op').forEach(y=>y.classList.toggle('sel',y===x));refrescarTarifa();};
+    m.appendChild(x);
+  });
   refrescarTarifa();
 }
-document.querySelectorAll('#montos .op').forEach(x=>x.onclick=()=>{
-  monto=Number(x.dataset.m);
-  document.querySelectorAll('#montos .op').forEach(y=>y.classList.toggle('sel',y===x));
-  refrescarTarifa();
-});
 function refrescarTarifa(){
   $('tarifa').textContent=monto?('Tarifa: '+rd(monto)):'';
   const chasis=$('chasis').value.trim();
@@ -389,7 +421,9 @@ $('guardar').onclick=async()=>{
 function abrirFormBarco(){
   tipoNuevo=null;$('codBarras').value='';$('codNum').value='';
   const c=$('tiposBarco');c.innerHTML='';
-  for(const t of Object.keys(TARIFAS)){
+  const activos=cfg.tipos.filter(t=>t.activo).map(t=>t.nombre);
+  if(!activos.length)c.appendChild(el('div','vacio','No hay tipos activos. Agrégalos en Configuración.'));
+  for(const t of activos){
     const x=el('button','op',t);x.dataset.t=t;
     x.onclick=()=>{tipoNuevo=t;c.querySelectorAll('.op').forEach(y=>y.classList.toggle('sel',y===x));};
     c.appendChild(x);
@@ -535,9 +569,12 @@ function marcarMontoG(){
   document.querySelectorAll('#montosG .op').forEach(b=>b.classList.toggle('sel',Number(b.dataset.m)===val));
   $('guardarGaseo').disabled=!(val>0);
 }
-document.querySelectorAll('#montosG .op').forEach(b=>b.onclick=()=>{$('gMonto').value=b.dataset.m;marcarMontoG();});
+function dibujarMontosG(){
+  const c=$('montosG');c.innerHTML='';
+  cfg.gaseoMontos.forEach(m=>{const b=el('button','op',rd(m));b.dataset.m=m;b.onclick=()=>{$('gMonto').value=m;marcarMontoG();};c.appendChild(b);});
+}
 $('gMonto').oninput=marcarMontoG;
-$('btnGaseo').onclick=()=>{$('gFecha').value=claveDia(new Date().toISOString());$('gMonto').value='';marcarMontoG();mostrar('formGaseo');};
+$('btnGaseo').onclick=()=>{$('gFecha').value=claveDia(new Date().toISOString());$('gMonto').value='';dibujarMontosG();marcarMontoG();mostrar('formGaseo');};
 $('cancelarGaseo').onclick=()=>mostrar('home');
 $('guardarGaseo').onclick=async()=>{
   const monto=Number($('gMonto').value);const f=$('gFecha').value;
@@ -564,8 +601,10 @@ async function pintarCarpetas(v,g,c){
     t.appendChild(izq);t.appendChild(el('b','',monto));t.onclick=fn;box.appendChild(t);
   };
   const plural=(n,a,b)=>n+' '+(n===1?a:b);
-  for(const t of Object.keys(TARIFAS)){
+  for(const t of nombresTiposData(v,bs)){
     const mb=bs.filter(b=>b.tipo===t),mv=v.filter(x=>x.barco===t&&x.barcoId);
+    const cf=cfg.tipos.find(y=>y.nombre===t);
+    if(cf&&!cf.activo&&!mb.length)continue;
     tile('📁 '+t,plural(mb.length,'barco','barcos')+' · '+plural(mv.length,'vehículo','vehículos'),rd(mv.reduce((s,x)=>s+x.tarifa,0)),()=>abrirCarpeta(t));
   }
   tile('📁 Gaseo',plural(g.length,'gaseo','gaseos'),rd(g.reduce((s,y)=>s+y.monto,0)),()=>abrirCarpeta('Gaseo'));
@@ -614,6 +653,111 @@ async function pintarHist(){
     m.onclick=async()=>{diasMostrados+=7;await pintarHist();};c.appendChild(m);
   }
 }
+
+// ---------- Configuración (tipos de trabajo y montos) ----------
+function normalizarCfg(c){
+  if(!c||!Array.isArray(c.tipos)||!c.tipos.length)return null;
+  const tipos=c.tipos.filter(t=>t&&typeof t.nombre==='string'&&t.nombre).map(t=>({
+    nombre:t.nombre,tarifa:(typeof t.tarifa==='number'&&t.tarifa>0)?t.tarifa:null,
+    opciones:Array.isArray(t.opciones)?t.opciones.filter(n=>n>0):[],activo:t.activo!==false}));
+  if(!tipos.length)return null;
+  const gm=Array.isArray(c.gaseoMontos)&&c.gaseoMontos.length?c.gaseoMontos.filter(n=>n>0):CFG_DEFECTO.gaseoMontos.slice();
+  return {tipos,gaseoMontos:gm};
+}
+async function cargarConfig(){const c=normalizarCfg(await getMeta('config'));if(c)cfg=c;}
+function guardarConfig(){return setMeta('config',cfg);}
+function cfgTipo(n){return cfg.tipos.find(t=>t.nombre===n)||{nombre:n,tarifa:null,opciones:[],activo:false};}
+function nombresTiposData(v,bs){
+  const n=cfg.tipos.map(t=>t.nombre);
+  [...bs.map(b=>b.tipo),...v.map(x=>x.barco)].forEach(x=>{if(x&&!n.includes(x))n.push(x);});
+  return n;
+}
+function parseMontos(str){return [...new Set(String(str).split(/[,;\s]+/).map(Number).filter(n=>n>0&&isFinite(n)))].sort((a,b)=>a-b);}
+function vincularPrev(inId,prevId){
+  const f=()=>{const m=parseMontos($(inId).value);$(prevId).textContent=m.length?'Se guardará: '+m.map(rd).join(' · '):'';};
+  $(inId).oninput=f;f();
+}
+vincularPrev('gaseoMontosIn','gaseoPrev');vincularPrev('tOpciones','tPrev');
+
+function pintarConfig(){
+  const c=$('listaTipos');c.innerHTML='';
+  cfg.tipos.forEach((t,i)=>{
+    const f=el('div','tarjeta click');
+    const izq=el('div');const b=el('b','',t.nombre);
+    if(!t.activo)b.appendChild(el('span','tag ce','Oculto'));
+    izq.appendChild(b);
+    izq.appendChild(el('small','',t.tarifa!=null?'Tarifa fija: '+rd(t.tarifa):'Tarifa a elegir: '+t.opciones.map(n=>rd(n)).join(' / ')));
+    f.appendChild(izq);f.appendChild(el('small','','Editar ›'));f.onclick=()=>abrirEditTipo(i);c.appendChild(f);
+  });
+  $('gaseoMontosIn').value=cfg.gaseoMontos.join(', ');vincularPrev('gaseoMontosIn','gaseoPrev');
+}
+$('mConfig').onclick=()=>{cerrarMenu();pintarConfig();mostrar('pConfig');};
+$('volverInicio3').onclick=async()=>{mostrar('home');await pintar();};
+$('guardarGaseoMontos').onclick=async()=>{
+  const m=parseMontos($('gaseoMontosIn').value);
+  if(!m.length||m.length>9){aviso('Pon entre 1 y 9 montos');return;}
+  cfg.gaseoMontos=m;await guardarConfig();pintarConfig();aviso('Montos de gaseo guardados');
+};
+
+let editIdx=null,modoTarifa='fija';
+function marcarModo(){
+  $('tFija').classList.toggle('sel',modoTarifa==='fija');$('tVarias').classList.toggle('sel',modoTarifa==='varias');
+  $('boxFija').style.display=modoTarifa==='fija'?'block':'none';$('boxVarias').style.display=modoTarifa==='varias'?'block':'none';
+}
+$('tFija').onclick=()=>{modoTarifa='fija';marcarModo();};
+$('tVarias').onclick=()=>{modoTarifa='varias';marcarModo();};
+async function abrirEditTipo(i){
+  editIdx=i;const t=i===null?null:cfg.tipos[i];
+  $('editTitulo').textContent=t?'Editar '+t.nombre:'Nuevo tipo';
+  $('tNombre').value=t?t.nombre:'';
+  modoTarifa=(t&&t.tarifa==null)?'varias':'fija';
+  $('tMonto').value=t&&t.tarifa!=null?t.tarifa:'';
+  $('tOpciones').value=t&&t.tarifa==null?t.opciones.join(', '):'';
+  vincularPrev('tOpciones','tPrev');marcarModo();
+  $('ocultarTipo').style.display=t?'block':'none';
+  $('ocultarTipo').textContent=t&&!t.activo?'Mostrar este tipo':'Ocultar este tipo';
+  $('borrarTipo').style.display='none';
+  mostrar('pEditTipo');
+  if(t){const usado=(await todos('barcos')).some(b=>b.tipo===t.nombre);$('borrarTipo').style.display=usado?'none':'block';}
+}
+$('nuevoTipo').onclick=()=>abrirEditTipo(null);
+$('cancelarTipo').onclick=()=>{pintarConfig();mostrar('pConfig');};
+function renombrarTipoDB(a,b){return new Promise((ok,mal)=>{
+  const t=db.transaction(['barcos','vehiculos'],'readwrite');
+  const sb=t.objectStore('barcos'),sv=t.objectStore('vehiculos');
+  sb.getAll().onsuccess=e=>e.target.result.forEach(x=>{if(x.tipo===a){x.tipo=b;sb.put(x);}});
+  sv.getAll().onsuccess=e=>e.target.result.forEach(x=>{if(x.barco===a){x.barco=b;sv.put(x);}});
+  t.oncomplete=ok;t.onerror=()=>mal(t.error);
+});}
+$('guardarTipo').onclick=async()=>{
+  const nombre=$('tNombre').value.trim();
+  if(!nombre){aviso('Escribe un nombre');return;}
+  const low=nombre.toLowerCase();
+  if(low==='gaseo'||low==='sin barco'){aviso('Ese nombre está reservado');return;}
+  if(cfg.tipos.some((t,i)=>i!==editIdx&&t.nombre.toLowerCase()===low)){aviso('Ya existe un tipo con ese nombre');return;}
+  let tarifa=null,opciones=[];
+  if(modoTarifa==='fija'){tarifa=Number($('tMonto').value);if(!(tarifa>0)){aviso('Pon el monto por vehículo');return;}}
+  else{opciones=parseMontos($('tOpciones').value);if(opciones.length<2){aviso('Pon al menos 2 montos, o usa tarifa fija');return;}}
+  if(editIdx===null)cfg.tipos.push({nombre,tarifa,opciones,activo:true});
+  else{
+    const t=cfg.tipos[editIdx];
+    if(t.nombre!==nombre)await renombrarTipoDB(t.nombre,nombre);
+    t.nombre=nombre;t.tarifa=tarifa;t.opciones=opciones;
+  }
+  await guardarConfig();pintarConfig();mostrar('pConfig');aviso('Guardado');
+};
+$('ocultarTipo').onclick=async()=>{
+  const t=cfg.tipos[editIdx];
+  if(t.activo&&cfg.tipos.filter(x=>x.activo).length<=1){aviso('Debe quedar al menos un tipo visible');return;}
+  t.activo=!t.activo;await guardarConfig();pintarConfig();mostrar('pConfig');
+  aviso(t.activo?'Tipo visible otra vez':'Tipo oculto. Su historial se conserva');
+};
+$('borrarTipo').onclick=async()=>{
+  const t=cfg.tipos[editIdx];
+  if(cfg.tipos.length<=1||(t.activo&&cfg.tipos.filter(x=>x.activo).length<=1)){aviso('Debe quedar al menos un tipo');return;}
+  if(!confirm('¿Eliminar el tipo «'+t.nombre+'»?'))return;
+  cfg.tipos.splice(editIdx,1);await guardarConfig();pintarConfig();mostrar('pConfig');aviso('Tipo eliminado');
+};
 
 // ---------- Respaldo, restaurar y Excel ----------
 function getMeta(k){return new Promise(ok=>{db.transaction('meta').objectStore('meta').get(k).onsuccess=e=>ok(e.target.result?e.target.result.v:null);});}
@@ -666,7 +810,7 @@ async function crearRespaldo(){
     if(x.foto){const ext=((x.foto.type||'image/jpeg').split('/')[1]||'jpg').replace('jpeg','jpg');
       r.fotoArchivo='fotos/'+x.id+'.'+ext;archivos.push({nombre:r.fotoArchivo,blob:x.foto});}
     return r;});
-  const data={app:'patio',version:1,fecha:new Date().toISOString(),contador:cont||0,vehiculos:vs,barcos:bs,gaseos:g};
+  const data={app:'patio',version:1,fecha:new Date().toISOString(),contador:cont||0,config:cfg,vehiculos:vs,barcos:bs,gaseos:g};
   archivos.unshift({nombre:'data.json',blob:new Blob([JSON.stringify(data)],{type:'application/json'})});
   return {blob:await hacerZip(archivos),nombre:'patio-respaldo-'+hoyTxt()+'.zip',fecha:data.fecha};
 }
@@ -694,7 +838,7 @@ async function crearExcel(){
   const v=(await todos('vehiculos')).sort((a,b)=>a.num-b.num);
   const g=(await todos('gaseos')).sort((a,b)=>a.fecha.localeCompare(b.fecha));
   const bs=(await todos('barcos')).sort((a,b)=>a.bid-b.bid);
-  const tipos=Object.keys(TARIFAS);
+  const tipos=nombresTiposData(v,bs);
   // Resumen por día
   const dias=[...new Set([...v.map(x=>claveDia(x.fecha)),...g.map(y=>claveDia(y.fecha))])].sort().reverse();
   const resumen=[['Fecha',...tipos.map(t=>t+' (cant.)'),...tipos.map(t=>t+' RD$'),'Gaseo RD$']];
@@ -791,6 +935,7 @@ $('archivoResp').onchange=async e=>{
       }else{x.foto=null;x.mini=null;}
       delete x.fotoArchivo;vs.push(x);
     }
+    const cfgNuevo=normalizarCfg(data.config)||cfg;
     await new Promise((ok,mal)=>{
       const t=db.transaction(['vehiculos','barcos','gaseos','meta'],'readwrite');
       ['vehiculos','barcos','gaseos','meta'].forEach(n=>t.objectStore(n).clear());
@@ -799,9 +944,10 @@ $('archivoResp').onchange=async e=>{
       (data.gaseos||[]).forEach(y=>t.objectStore('gaseos').put(y));
       t.objectStore('meta').put({k:'contador',v:Math.max(data.contador||0,...vs.map(x=>x.num))});
       t.objectStore('meta').put({k:'ultimoRespaldo',v:data.fecha});
+      t.objectStore('meta').put({k:'config',v:cfgNuevo});
       t.oncomplete=ok;t.onerror=()=>mal(t.error);
     });
-    aviso('Listo: '+vs.length+' vehículos restaurados');await pintarResp();
+    cfg=cfgNuevo;aviso('Listo: '+vs.length+' vehículos restaurados');await pintarResp();
   }catch(err){aviso('No se pudo restaurar: '+(err&&err.message?err.message:err));}
   finally{ocupado=false;}
 };
@@ -831,7 +977,7 @@ $('volverBarcos').onclick=async()=>{
 $('volverHist').onclick=async()=>{mostrar('pHist');await pintarHist();};
 function abrirCarpeta(t){
   carpetaActual=t;filtro='todos';$('buscarBarco').value='';marcarChip();
-  const esBarcos=Object.prototype.hasOwnProperty.call(TARIFAS,t);
+  const esBarcos=t!=='Gaseo'&&t!=='Sin barco';
   $('buscarBarco').style.display=esBarcos?'':'none';$('chips').style.display=esBarcos?'':'none';
   $('tituloCarpeta').textContent=t;mostrar('pBarcos');pintarBarcos();
 }
@@ -933,7 +1079,7 @@ async function verDetalle(bid,desde){
 function estado(){const e=$('estado');e.textContent=navigator.onLine?'Con internet':'Sin internet';e.className=navigator.onLine?'on':'off';}
 addEventListener('online',estado);addEventListener('offline',estado);estado();
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js');}
-abrirDB().then(pintar);
+abrirDB().then(cargarConfig).then(pintar);
 if(navigator.storage&&navigator.storage.persist){navigator.storage.persist().catch(()=>{});}
 </script>
 </body>
