@@ -95,11 +95,13 @@
   <h3>Patio</h3>
   <button id="mInicio">🏠 Inicio</button>
   <button id="mHist">📅 Historial</button>
+  <button id="mResp">💾 Respaldo</button>
   <hr>
   <button id="mBorrar" class="peligro">🗑 Borrar datos de prueba</button>
 </nav>
 
 <div id="home">
+  <div id="avisoResp" class="click" style="display:none;background:#fef3c7;color:#92400e;border-radius:12px;padding:12px;margin-bottom:12px;font-weight:600"></div>
   <button id="agregar">Agregar vehículo</button>
   <button id="nuevoBarco">+ Nuevo barco</button>
   <button id="btnGaseo" class="sec2">Registrar gaseo</button>
@@ -148,6 +150,25 @@
   <input type="text" id="codNum" inputmode="numeric" autocomplete="off">
   <button id="guardarBarco" class="principal">Guardar barco</button>
   <button id="cancelarBarco" class="cancelar">Cancelar</button>
+</section>
+
+<section id="pResp" class="secc">
+  <button class="volver" id="volverInicio2">← Inicio</button>
+  <h2 style="font-size:1.2rem">Respaldo</h2>
+  <div class="caja" style="margin-top:0">
+    <div id="estadoResp"></div>
+    <p style="color:var(--gris);margin:10px 0 14px">El respaldo guarda todos tus vehículos, barcos, gaseos y fotos en un archivo. Guárdalo en Google Drive, mándatelo por WhatsApp o pásalo a tu computadora. Si pierdes o cambias de teléfono, lo restauras aquí.</p>
+    <button id="bDescargar" class="principal">⬇ Descargar respaldo</button>
+    <button id="bCompartir" class="sec2" style="display:none">📤 Compartir respaldo</button>
+    <button id="bExcel" class="sec2">📊 Exportar a Excel</button>
+    <p style="color:var(--gris);font-size:.85rem;margin:6px 0 0">El Excel trae los datos y totales, sin las fotos. Para guardar las fotos usa el respaldo.</p>
+  </div>
+  <div class="caja">
+    <h2>Restaurar</h2>
+    <p style="color:var(--gris);margin:0 0 12px">Elige un archivo de respaldo (.zip). Reemplaza todo lo que hay ahora en este teléfono.</p>
+    <input type="file" id="archivoResp" accept=".zip,application/zip" hidden>
+    <button id="bRestaurar" class="sec2" style="margin-top:0">📥 Restaurar desde un respaldo</button>
+  </div>
 </section>
 
 <section id="formGaseo" class="caja secc">
@@ -266,7 +287,7 @@ function guardarVehiculo(b,tarifa,foto,mini,chasis){return new Promise((ok,mal)=
 
 // ---------- Utilidades de pantalla ----------
 function aviso(t){const a=$('aviso');a.textContent=t;a.style.display='block';clearTimeout(aviso.t);aviso.t=setTimeout(()=>a.style.display='none',2800);}
-function mostrar(id){['home','formVeh','formBarco','pBarcos','pDetalle','formGaseo','pHist'].forEach(x=>{
+function mostrar(id){['home','formVeh','formBarco','pBarcos','pDetalle','formGaseo','pHist','pResp'].forEach(x=>{
   const e=$(x);e.style.display=x===id?'block':'none';});window.scrollTo(0,0);}
 function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e;}
 function nombreBarco(b){return b.tipo+' · '+(b.codigoBarras||b.codigoNum||'sin código');}
@@ -426,6 +447,14 @@ async function pintar(){
   const bs=(await todos('barcos')).sort((a,b)=>b.bid-a.bid);
   abiertos=bs.filter(b=>b.abierto);
   const g=await todos('gaseos');
+  {
+    const ult=await getMeta('ultimoRespaldo');
+    const pend=v.filter(x=>!ult||x.fecha>ult).length+g.filter(y=>!ult||y.fecha>ult).length;
+    const dd=ult?Math.floor((Date.now()-new Date(ult).getTime())/86400000):null;
+    const ar=$('avisoResp');
+    if(pend>0&&(!ult||dd>=7||pend>=50)){ar.style.display='block';ar.textContent='⚠ '+(ult?'Último respaldo hace '+dd+(dd===1?' día':' días'):'Aún no has hecho respaldo')+' · '+pend+' sin respaldar. Toca aquí.';}
+    else ar.style.display='none';
+  }
   const rs=resumenDia(v,g,claveDia(new Date().toISOString()));
   const rc=$('resumen');rc.innerHTML='';
   const tt=el('div');tt.appendChild(el('b','','Hoy'));tt.append(' · '+rs.n+(rs.n===1?' vehículo':' vehículos'));rc.appendChild(tt);
@@ -586,6 +615,197 @@ async function pintarHist(){
   }
 }
 
+// ---------- Respaldo, restaurar y Excel ----------
+function getMeta(k){return new Promise(ok=>{db.transaction('meta').objectStore('meta').get(k).onsuccess=e=>ok(e.target.result?e.target.result.v:null);});}
+function setMeta(k,v){return new Promise((ok,mal)=>{const t=db.transaction('meta','readwrite');t.objectStore('meta').put({k,v});t.oncomplete=ok;t.onerror=()=>mal(t.error);});}
+
+const crcTabla=(()=>{const t=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function crc32(u8){let c=0xFFFFFFFF;for(let i=0;i<u8.length;i++)c=crcTabla[(c^u8[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+
+// ZIP sin compresión, armado con trozos (las fotos no se cargan todas a la vez en memoria)
+async function hacerZip(archivos,tipo){
+  const partes=[],central=[];let offset=0;const enc=new TextEncoder();
+  for(const a of archivos){
+    const nombre=enc.encode(a.nombre);
+    const crc=crc32(new Uint8Array(await a.blob.arrayBuffer()));const tam=a.blob.size;
+    const lh=new DataView(new ArrayBuffer(30));
+    lh.setUint32(0,0x04034b50,true);lh.setUint16(4,20,true);lh.setUint16(6,0x0800,true);
+    lh.setUint16(12,0x21,true);lh.setUint32(14,crc,true);lh.setUint32(18,tam,true);lh.setUint32(22,tam,true);lh.setUint16(26,nombre.length,true);
+    partes.push(new Uint8Array(lh.buffer),nombre,a.blob);
+    const ch=new DataView(new ArrayBuffer(46));
+    ch.setUint32(0,0x02014b50,true);ch.setUint16(4,20,true);ch.setUint16(6,20,true);ch.setUint16(8,0x0800,true);ch.setUint16(14,0x21,true);
+    ch.setUint32(16,crc,true);ch.setUint32(20,tam,true);ch.setUint32(24,tam,true);ch.setUint16(28,nombre.length,true);ch.setUint32(42,offset,true);
+    central.push(new Uint8Array(ch.buffer),nombre);
+    offset+=30+nombre.length+tam;
+  }
+  const cdTam=central.reduce((s,x)=>s+x.length,0);
+  const fin=new DataView(new ArrayBuffer(22));
+  fin.setUint32(0,0x06054b50,true);fin.setUint16(8,archivos.length,true);fin.setUint16(10,archivos.length,true);fin.setUint32(12,cdTam,true);fin.setUint32(16,offset,true);
+  return new Blob([...partes,...central,new Uint8Array(fin.buffer)],{type:tipo||'application/zip'});
+}
+async function leerZip(file){
+  const out={};let off=0;
+  while(off+30<=file.size){
+    const h=new DataView(await file.slice(off,off+30).arrayBuffer());
+    if(h.getUint32(0,true)!==0x04034b50)break;
+    if(h.getUint16(8,true)!==0)throw new Error('zip comprimido');
+    const tam=h.getUint32(18,true),nl=h.getUint16(26,true),xl=h.getUint16(28,true);
+    const nombre=new TextDecoder().decode(await file.slice(off+30,off+30+nl).arrayBuffer());
+    const ini=off+30+nl+xl;out[nombre]=file.slice(ini,ini+tam);off=ini+tam;
+  }
+  return out;
+}
+const EXT_TIPO={jpg:'image/jpeg',png:'image/png',webp:'image/webp',heic:'image/heic'};
+function hoyTxt(){return claveDia(new Date().toISOString());}
+
+async function crearRespaldo(){
+  const [v,bs,g,cont]=await Promise.all([todos('vehiculos'),todos('barcos'),todos('gaseos'),getMeta('contador')]);
+  const archivos=[];
+  const vs=v.sort((a,b)=>a.num-b.num).map(x=>{
+    const r=Object.assign({},x);delete r.foto;delete r.mini;
+    if(x.foto){const ext=((x.foto.type||'image/jpeg').split('/')[1]||'jpg').replace('jpeg','jpg');
+      r.fotoArchivo='fotos/'+x.id+'.'+ext;archivos.push({nombre:r.fotoArchivo,blob:x.foto});}
+    return r;});
+  const data={app:'patio',version:1,fecha:new Date().toISOString(),contador:cont||0,vehiculos:vs,barcos:bs,gaseos:g};
+  archivos.unshift({nombre:'data.json',blob:new Blob([JSON.stringify(data)],{type:'application/json'})});
+  return {blob:await hacerZip(archivos),nombre:'patio-respaldo-'+hoyTxt()+'.zip',fecha:data.fecha};
+}
+function descargar(blob,nombre){
+  const u=URL.createObjectURL(blob);const a=document.createElement('a');
+  a.href=u;a.download=nombre;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(u),60000);
+}
+
+// --- Excel (.xlsx real, armado a mano; funciona sin internet) ---
+function colLetra(i){let s='';i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26);}return s;}
+function xmlEsc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function hojaXML(filas,anchos){
+  let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>'
+    +anchos.map((w,i)=>'<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>').join('')+'</cols><sheetData>';
+  filas.forEach((f,r)=>{x+='<row r="'+(r+1)+'">';
+    f.forEach((c,i)=>{const ref=colLetra(i)+(r+1);
+      if(typeof c==='number')x+='<c r="'+ref+'"><v>'+c+'</v></c>';
+      else x+='<c r="'+ref+'" t="inlineStr"'+(r===0?' s="1"':'')+'><is><t xml:space="preserve">'+xmlEsc(c)+'</t></is></c>';});
+    x+='</row>';});
+  return x+'</sheetData></worksheet>';
+}
+function horaTxt(iso){const d=new Date(iso);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+async function crearExcel(){
+  const v=(await todos('vehiculos')).sort((a,b)=>a.num-b.num);
+  const g=(await todos('gaseos')).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const bs=(await todos('barcos')).sort((a,b)=>a.bid-b.bid);
+  const tipos=Object.keys(TARIFAS);
+  // Resumen por día
+  const dias=[...new Set([...v.map(x=>claveDia(x.fecha)),...g.map(y=>claveDia(y.fecha))])].sort().reverse();
+  const resumen=[['Fecha',...tipos.map(t=>t+' (cant.)'),...tipos.map(t=>t+' RD$'),'Gaseo RD$']];
+  for(const k of dias){const r=resumenDia(v,g,k);
+    resumen.push([k,...tipos.map(t=>(r.tipos[t]||{n:0}).n),...tipos.map(t=>(r.tipos[t]||{monto:0}).monto),r.gaseo]);}
+  const veh=[['ID','Fecha','Hora','Tipo','Código del barco','Tarifa RD$','Chasis','Foto']];
+  v.forEach(x=>veh.push([x.id,claveDia(x.fecha),horaTxt(x.fecha),x.barco,x.codigo||'',x.tarifa,x.chasis||'',x.foto?'Sí':'No']));
+  const gas=[['Fecha','Monto RD$']];g.forEach(y=>gas.push([claveDia(y.fecha),y.monto]));
+  const bar=[['Tipo','Código de barras','Código numérico','Estado','Abierto el','Cerrado el','Vehículos','Total RD$']];
+  bs.forEach(b=>{const m=v.filter(x=>x.barcoId===b.bid);
+    bar.push([b.tipo,b.codigoBarras||'',b.codigoNum||'',b.abierto?'Abierto':'Cerrado',claveDia(b.fecha),b.cierre?claveDia(b.cierre):'',m.length,m.reduce((s,x)=>s+x.tarifa,0)]);});
+  const hojas=[
+    ['Resumen por día',resumen,[12,...tipos.map(()=>18),...tipos.map(()=>16),12]],
+    ['Vehículos',veh,[9,12,8,16,20,12,24,7]],
+    ['Gaseos',gas,[12,12]],
+    ['Barcos',bar,[16,20,18,10,12,12,10,12]]
+  ];
+  const NS='xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"';
+  const T=(n,t)=>({nombre:n,blob:new Blob([t],{type:'application/xml'})});
+  const arch=[
+    T('[Content_Types].xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+      +hojas.map((h,i)=>'<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join('')+'</Types>'),
+    T('_rels/.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'),
+    T('xl/workbook.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook '+NS+' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'
+      +hojas.map((h,i)=>'<sheet name="'+xmlEsc(h[0])+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>').join('')+'</sheets></workbook>'),
+    T('xl/_rels/workbook.xml.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      +hojas.map((h,i)=>'<Relationship Id="rId'+(i+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+(i+1)+'.xml"/>').join('')
+      +'<Relationship Id="rId'+(hojas.length+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'),
+    T('xl/styles.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet '+NS+'><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>')
+  ];
+  hojas.forEach((h,i)=>arch.push(T('xl/worksheets/sheet'+(i+1)+'.xml',hojaXML(h[1],h[2]))));
+  return {blob:await hacerZip(arch,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),nombre:'patio-excel-'+hoyTxt()+'.xlsx'};
+}
+
+// --- Pantalla de respaldo ---
+let respaldoListo=null,ocupado=false;
+async function pintarResp(){
+  const v=await todos('vehiculos'),g=await todos('gaseos');
+  const ult=await getMeta('ultimoRespaldo');
+  const pend=v.filter(x=>!ult||x.fecha>ult).length+g.filter(y=>!ult||y.fecha>ult).length;
+  const e=$('estadoResp');e.innerHTML='';
+  const l1=el('div');l1.appendChild(el('b','','Último respaldo: '));
+  l1.append(ult?fmt(ult):'todavía no has hecho ninguno');e.appendChild(l1);
+  e.appendChild(el('div','',pend+(pend===1?' registro sin respaldar':' registros sin respaldar')));
+  $('bCompartir').style.display=(navigator.canShare&&navigator.canShare({files:[new File(['x'],'x.zip',{type:'application/zip'})]}))?'block':'none';
+}
+async function abrirResp(){respaldoListo=null;mostrar('pResp');await pintarResp();}
+$('mResp').onclick=()=>{cerrarMenu();abrirResp();};
+$('avisoResp').onclick=abrirResp;
+$('volverInicio2').onclick=async()=>{mostrar('home');await pintar();};
+async function conOcupado(boton,texto,fn){
+  if(ocupado)return;ocupado=true;const t0=boton.textContent;boton.textContent=texto;boton.disabled=true;
+  try{await fn();}catch(e){aviso('Algo falló: '+(e&&e.message?e.message:e));}
+  finally{ocupado=false;boton.textContent=t0;boton.disabled=false;}
+}
+$('bDescargar').onclick=()=>conOcupado($('bDescargar'),'Preparando…',async()=>{
+  const r=respaldoListo||await crearRespaldo();respaldoListo=null;
+  descargar(r.blob,r.nombre);await setMeta('ultimoRespaldo',r.fecha);
+  aviso('Respaldo descargado. Guárdalo en un lugar seguro.');await pintarResp();
+});
+$('bCompartir').onclick=()=>conOcupado($('bCompartir'),'Preparando…',async()=>{
+  if(!respaldoListo)respaldoListo=await crearRespaldo();
+  const r=respaldoListo;
+  try{
+    await navigator.share({files:[new File([r.blob],r.nombre,{type:'application/zip'})],title:'Respaldo Patio'});
+    await setMeta('ultimoRespaldo',r.fecha);respaldoListo=null;await pintarResp();
+  }catch(e){
+    if(e&&e.name==='AbortError')return;
+    aviso('Listo. Toca «Compartir respaldo» otra vez.');
+  }
+});
+$('bExcel').onclick=()=>conOcupado($('bExcel'),'Preparando…',async()=>{
+  const r=await crearExcel();descargar(r.blob,r.nombre);aviso('Excel descargado');
+});
+$('bRestaurar').onclick=()=>$('archivoResp').click();
+$('archivoResp').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f||ocupado)return;
+  let zip,data;
+  try{
+    zip=await leerZip(f);data=JSON.parse(await zip['data.json'].text());
+    if(data.app!=='patio'||!Array.isArray(data.vehiculos))throw new Error('x');
+  }catch(err){aviso('Ese archivo no es un respaldo válido de esta app');return;}
+  const actuales=(await todos('vehiculos')).length;
+  if(!confirm('Este respaldo es del '+fmt(data.fecha)+' y tiene '+data.vehiculos.length+' vehículos, '+(data.barcos||[]).length+' barcos y '+(data.gaseos||[]).length+' gaseos.\n\nVa a REEMPLAZAR todo lo que hay ahora en este teléfono ('+actuales+' vehículos). ¿Continuar?'))return;
+  ocupado=true;aviso('Restaurando…');
+  try{
+    const vs=[];
+    for(const r of data.vehiculos){
+      const x=Object.assign({},r);
+      if(x.fotoArchivo&&zip[x.fotoArchivo]){
+        const ext=x.fotoArchivo.split('.').pop().toLowerCase();
+        x.foto=new Blob([zip[x.fotoArchivo]],{type:EXT_TIPO[ext]||'image/jpeg'});
+        x.mini=await hacerMini(x.foto);
+      }else{x.foto=null;x.mini=null;}
+      delete x.fotoArchivo;vs.push(x);
+    }
+    await new Promise((ok,mal)=>{
+      const t=db.transaction(['vehiculos','barcos','gaseos','meta'],'readwrite');
+      ['vehiculos','barcos','gaseos','meta'].forEach(n=>t.objectStore(n).clear());
+      vs.forEach(x=>t.objectStore('vehiculos').put(x));
+      (data.barcos||[]).forEach(b=>t.objectStore('barcos').put(b));
+      (data.gaseos||[]).forEach(y=>t.objectStore('gaseos').put(y));
+      t.objectStore('meta').put({k:'contador',v:Math.max(data.contador||0,...vs.map(x=>x.num))});
+      t.objectStore('meta').put({k:'ultimoRespaldo',v:data.fecha});
+      t.oncomplete=ok;t.onerror=()=>mal(t.error);
+    });
+    aviso('Listo: '+vs.length+' vehículos restaurados');await pintarResp();
+  }catch(err){aviso('No se pudo restaurar: '+(err&&err.message?err.message:err));}
+  finally{ocupado=false;}
+};
+
 // ---------- Menú ----------
 function abrirMenu(){$('velo').style.display='block';$('drawer').classList.add('abierto');}
 function cerrarMenu(){$('velo').style.display='none';$('drawer').classList.remove('abierto');}
@@ -714,6 +934,7 @@ function estado(){const e=$('estado');e.textContent=navigator.onLine?'Con intern
 addEventListener('online',estado);addEventListener('offline',estado);estado();
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js');}
 abrirDB().then(pintar);
+if(navigator.storage&&navigator.storage.persist){navigator.storage.persist().catch(()=>{});}
 </script>
 </body>
 </html>
