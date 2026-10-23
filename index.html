@@ -86,17 +86,25 @@
   .borrar{background:none;color:#991b1b;text-decoration:underline;padding:6px 0 6px 12px}
   .montosGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
   .peligro2{width:100%;padding:12px;margin-top:6px;background:none;color:#991b1b;text-decoration:underline}
+  .navmes{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+  .navmes button{width:44px;height:44px;font-size:1.4rem;background:#fff;border:1px solid var(--linea)}
+  .navmes button:disabled{opacity:.35}
+  .navmes h2{margin:0;font-size:1.1rem;text-align:center}
+  .sub{color:var(--gris);font-size:.85rem;padding:0 0 4px 12px}
+  .gran{font-size:1.5rem}
+  #quien{display:block;color:var(--gris);font-size:.85rem;margin-top:2px}
   #aviso{position:fixed;left:16px;right:16px;bottom:16px;background:var(--verde);color:#fff;padding:14px;border-radius:12px;text-align:center;font-weight:600;display:none;max-width:488px;margin-inline:auto;z-index:10}
 </style>
 </head>
 <body>
-<header><div class="cab"><button id="menuBtn" aria-label="Menú">☰</button><h1>Patio</h1></div><span id="estado"></span></header>
+<header><div class="cab"><button id="menuBtn" aria-label="Menú">☰</button><div><h1>Patio</h1><small id="quien" class="click"></small></div></div><span id="estado"></span></header>
 
 <div id="velo"></div>
 <nav id="drawer">
   <h3>Patio</h3>
   <button id="mInicio">🏠 Inicio</button>
   <button id="mHist">📅 Historial</button>
+  <button id="mMes">📊 Resumen del mes</button>
   <button id="mResp">💾 Respaldo</button>
   <button id="mConfig">⚙ Configuración</button>
   <hr>
@@ -152,10 +160,48 @@
   <button id="cancelarBarco" class="cancelar">Cancelar</button>
 </section>
 
+<section id="pEditVeh" class="caja secc">
+  <h2 id="evTitulo" style="font-size:1.2rem;margin-bottom:2px"></h2>
+  <small id="evInfo" style="color:var(--gris)"></small>
+  <h2 style="margin-top:16px">Barco</h2>
+  <div class="opciones" id="evBarcos"></div>
+  <div id="evVarias" style="display:none"><h2>¿Cuánto?</h2><div class="montosGrid" id="evMontos"></div><div style="height:14px"></div></div>
+  <p class="tarifa" id="evTarifa"></p>
+  <h2>Foto</h2>
+  <input type="file" id="evFotoIn" accept="image/*" capture="environment" hidden>
+  <div id="evPrev" style="display:none;margin-bottom:10px;text-align:center"><img id="evPrevImg" alt="Foto" style="max-width:100%;max-height:220px;border-radius:12px;border:1px solid var(--linea)"></div>
+  <button id="evFotoBtn" class="sec2" style="margin-top:0">📷 Tomar foto</button>
+  <button id="evQuitarFoto" class="peligro2" style="display:none">Quitar foto</button>
+  <label for="evChasis" style="margin-top:14px">Chasis</label>
+  <input type="text" id="evChasis" autocapitalize="characters" autocomplete="off" placeholder="Ej. 1HGCM82633A004352">
+  <p id="evFalta" style="color:#991b1b;font-weight:600;margin:0 0 10px"></p>
+  <button id="evGuardar" class="principal">Guardar cambios</button>
+  <button id="evBorrar" class="peligro2">🗑 Borrar este vehículo</button>
+  <button id="evCancelar" class="cancelar">Cancelar</button>
+</section>
+
+<section id="pMes" class="secc">
+  <button class="volver" id="volverInicio4">← Inicio</button>
+  <div class="navmes"><button id="mesAnt" aria-label="Mes anterior">‹</button><h2 id="tituloMes"></h2><button id="mesSig" aria-label="Mes siguiente">›</button></div>
+  <div class="chips" id="chipsMes">
+    <button class="chip sel" data-r="mes">Mes completo</button>
+    <button class="chip" data-r="q1">Del 1 al 15</button>
+    <button class="chip" data-r="q2">Del 16 al fin</button>
+  </div>
+  <div id="mesCont"></div>
+</section>
+
 <section id="pConfig" class="secc">
   <button class="volver" id="volverInicio3">← Inicio</button>
   <h2 style="font-size:1.2rem">Configuración</h2>
   <div class="caja" style="margin-top:0">
+    <h2>Chofer</h2>
+    <label for="choferIn">Tu nombre</label>
+    <input type="text" id="choferIn" maxlength="40" placeholder="Ej. Juan Pérez" autocomplete="off">
+    <button id="guardarChofer" class="principal">Guardar nombre</button>
+    <p style="color:var(--gris);font-size:.85rem;margin:8px 0 0">Tu nombre sale arriba en la app, en el Excel y en tus respaldos.</p>
+  </div>
+  <div class="caja">
     <h2>Tipos de trabajo (barcos)</h2>
     <p style="color:var(--gris);margin:0 0 6px">Toca uno para cambiar su nombre o su tarifa.</p>
     <div id="listaTipos"></div>
@@ -256,9 +302,9 @@
 <script>
 const $=id=>document.getElementById(id);
 const rd=n=>'RD$'+n.toLocaleString('es-DO');
-const CFG_DEFECTO={tipos:[{nombre:'Auto Prestige',tarifa:71,opciones:[],activo:true},{nombre:'Ferry',tarifa:91,opciones:[],activo:true},{nombre:'Sucha',tarifa:null,opciones:[200,400],activo:true}],gaseoMontos:[500,1000,1100,1200,1500]};
+const CFG_DEFECTO={tipos:[{nombre:'Auto Prestige',tarifa:71,opciones:[],activo:true},{nombre:'Ferry',tarifa:91,opciones:[],activo:true},{nombre:'Sucha',tarifa:null,opciones:[200,400],activo:true}],gaseoMontos:[500,1000,1100,1200,1500],chofer:''};
 let cfg=JSON.parse(JSON.stringify(CFG_DEFECTO));
-let db,barcoSel=null,monto=null,foto=null,fotoMini=null,visorUrl=null,tipoNuevo=null,urls=[],abiertos=[];
+let pantallaActual='home',detalleBid=null,db,barcoSel=null,monto=null,foto=null,fotoMini=null,visorUrl=null,tipoNuevo=null,urls=[],abiertos=[];
 
 // ---------- Base de datos local (IndexedDB) ----------
 function abrirDB(){return new Promise((ok,mal)=>{
@@ -317,7 +363,7 @@ function guardarVehiculo(b,tarifa,foto,mini,chasis){return new Promise((ok,mal)=
 
 // ---------- Utilidades de pantalla ----------
 function aviso(t){const a=$('aviso');a.textContent=t;a.style.display='block';clearTimeout(aviso.t);aviso.t=setTimeout(()=>a.style.display='none',2800);}
-function mostrar(id){['home','formVeh','formBarco','pBarcos','pDetalle','formGaseo','pHist','pResp','pConfig','pEditTipo'].forEach(x=>{
+function mostrar(id){pantallaActual=id;['home','formVeh','formBarco','pBarcos','pDetalle','formGaseo','pHist','pResp','pConfig','pEditTipo','pMes','pEditVeh'].forEach(x=>{
   const e=$(x);e.style.display=x===id?'block':'none';});window.scrollTo(0,0);}
 function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e;}
 function nombreBarco(b){return b.tipo+' · '+(b.codigoBarras||b.codigoNum||'sin código');}
@@ -483,7 +529,7 @@ async function pintar(){
   const g=await todos('gaseos');
   {
     const ult=await getMeta('ultimoRespaldo');
-    const pend=v.filter(x=>!ult||x.fecha>ult).length+g.filter(y=>!ult||y.fecha>ult).length;
+    const pend=v.filter(x=>!ult||(x.editadoEn||x.fecha)>ult).length+g.filter(y=>!ult||y.fecha>ult).length;
     const dd=ult?Math.floor((Date.now()-new Date(ult).getTime())/86400000):null;
     const ar=$('avisoResp');
     if(pend>0&&(!ult||dd>=7||pend>=50)){ar.style.display='block';ar.textContent='⚠ '+(ult?'Último respaldo hace '+dd+(dd===1?' día':' días'):'Aún no has hecho respaldo')+' · '+pend+' sin respaldar. Toca aquí.';}
@@ -527,7 +573,7 @@ function filaVeh(x,conBarco){
   if(x.foto){
     const u=URL.createObjectURL(x.mini||x.foto);urls.push(u);
     const im=el('img');im.src=u;im.alt='Foto '+x.id;
-    im.onclick=()=>{visorUrl=URL.createObjectURL(x.foto);$('visorImg').src=visorUrl;$('visor').style.display='flex';};
+    im.onclick=e=>{e.stopPropagation();visorUrl=URL.createObjectURL(x.foto);$('visorImg').src=visorUrl;$('visor').style.display='flex';};
     izq.appendChild(im);
   }
   const tx=el('div');
@@ -535,8 +581,11 @@ function filaVeh(x,conBarco){
   if(conBarco)tx.append(' · '+x.barco+(x.codigo?' · '+x.codigo:''));
   tx.appendChild(el('small','',fmt(x.fecha)));
   if(x.chasis)tx.appendChild(el('small','','Chasis: '+x.chasis));
+  if(x.editadoEn)tx.appendChild(el('small','','✏ Editado '+fmt(x.editadoEn)));
   izq.appendChild(tx);li.appendChild(izq);
-  li.appendChild(el('b','',rd(x.tarifa)));
+  const der=el('div');der.style.textAlign='right';
+  der.appendChild(el('b','',rd(x.tarifa)));der.appendChild(el('small','','Editar ›'));
+  li.appendChild(der);li.classList.add('click');li.onclick=()=>abrirEditVeh(x.num);
   return li;
 }
 
@@ -654,6 +703,162 @@ async function pintarHist(){
   }
 }
 
+// ---------- Editar o borrar un vehículo ----------
+let ev=null,evUrl=null,volverEdit='home';
+async function refrescarPantalla(id){
+  if(id==='pHist')await pintarHist();
+  else if(id==='pBarcos')await pintarBarcos();
+  else if(id==='pDetalle')await verDetalle(detalleBid,origenDetalle);
+  else if(id==='pMes')await pintarMes();
+  else{id='home';await pintar();}
+  mostrar(id);
+}
+function evPintarFoto(){
+  if(evUrl){URL.revokeObjectURL(evUrl);evUrl=null;}
+  if(ev.foto){evUrl=URL.createObjectURL(ev.foto);$('evPrevImg').src=evUrl;$('evPrev').style.display='block';}
+  else{$('evPrev').style.display='none';}
+  $('evFotoBtn').textContent=ev.foto?'📷 Cambiar foto':'📷 Tomar foto';
+  $('evQuitarFoto').style.display=ev.foto?'block':'none';
+}
+function evRefrescar(){
+  const ch=$('evChasis').value.trim();
+  const okId=!!ev.foto||ch.length>=5;
+  const okTar=ev.tarifa>0;
+  $('evTarifa').textContent=okTar?'Tarifa: '+rd(ev.tarifa):'';
+  $('evFalta').textContent=!okTar?'Elige cuánto es la tarifa':(!okId?(ch?'El chasis es muy corto':'Pon la foto o escribe el chasis'):'');
+  $('evGuardar').disabled=!(okId&&okTar);
+}
+function evElegirBarco(b){
+  const x=ev.reg;ev.barco=b;
+  const tc=cfgTipo(b.tipo),mismo=b.bid===x.barcoId;
+  ev.tarifa=mismo?x.tarifa:tc.tarifa;
+  document.querySelectorAll('#evBarcos .op').forEach(y=>y.classList.toggle('sel',Number(y.dataset.bid)===b.bid));
+  const m=$('evMontos');m.innerHTML='';
+  const varias=tc.tarifa==null;
+  $('evVarias').style.display=varias?'block':'none';
+  if(varias){
+    const ops=[...new Set([...tc.opciones,...(mismo?[x.tarifa]:[])])].sort((a,c)=>a-c);
+    ops.forEach(o=>{
+      const bt=el('button','op'+(o===ev.tarifa?' sel':''),rd(o));
+      bt.onclick=()=>{ev.tarifa=o;m.querySelectorAll('.op').forEach(y=>y.classList.toggle('sel',y===bt));evRefrescar();};
+      m.appendChild(bt);
+    });
+  }
+  evRefrescar();
+}
+async function abrirEditVeh(num){
+  const x=(await todos('vehiculos')).find(y=>y.num===num);if(!x)return;
+  const bs=await todos('barcos');
+  volverEdit=pantallaActual;
+  ev={reg:x,barco:bs.find(b=>b.bid===x.barcoId)||null,tarifa:x.tarifa,foto:x.foto||null,mini:x.mini||null};
+  $('evTitulo').textContent='Editar '+x.id;
+  $('evInfo').textContent=fmt(x.fecha)+(x.editadoEn?' · editado '+fmt(x.editadoEn):'');
+  $('evChasis').value=x.chasis||'';
+  const c=$('evBarcos');c.innerHTML='';
+  bs.filter(b=>b.abierto||b.bid===x.barcoId).sort((a,b)=>b.bid-a.bid).forEach(b=>{
+    const bt=el('button','op',b.tipo);bt.dataset.bid=b.bid;
+    bt.appendChild(el('small','',(b.codigoBarras||b.codigoNum||'sin código')+(b.abierto?'':' · cerrado')));
+    bt.onclick=()=>evElegirBarco(b);c.appendChild(bt);
+  });
+  if(!ev.barco)c.appendChild(el('small','','Este vehículo no tiene barco asignado. Elige uno si quieres asignárselo.'));
+  $('evMontos').innerHTML='';$('evVarias').style.display='none';
+  if(ev.barco)evElegirBarco(ev.barco);
+  evPintarFoto();evRefrescar();mostrar('pEditVeh');
+}
+$('evChasis').oninput=()=>{$('evChasis').value=$('evChasis').value.toUpperCase();evRefrescar();};
+$('evFotoBtn').onclick=()=>$('evFotoIn').click();
+$('evFotoIn').onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;
+  ev.foto=await procesarFoto(f);ev.mini=await hacerMini(ev.foto);e.target.value='';
+  evPintarFoto();evRefrescar();
+};
+$('evQuitarFoto').onclick=()=>{ev.foto=null;ev.mini=null;evPintarFoto();evRefrescar();};
+$('evCancelar').onclick=async()=>{if(evUrl){URL.revokeObjectURL(evUrl);evUrl=null;}await refrescarPantalla(volverEdit);};
+$('evGuardar').onclick=async()=>{
+  const x=ev.reg,ch=$('evChasis').value.trim();
+  if(!(ev.tarifa>0)||(!ev.foto&&ch.length<5)){evRefrescar();return;}
+  const n=Object.assign({},x,{chasis:ch,foto:ev.foto,mini:ev.mini,tarifa:ev.tarifa,editado:true,editadoEn:new Date().toISOString()});
+  if(ev.barco){n.barcoId=ev.barco.bid;n.barco=ev.barco.tipo;n.codigo=ev.barco.codigoBarras||ev.barco.codigoNum||'';}
+  await new Promise((ok,mal)=>{const t=db.transaction('vehiculos','readwrite');t.objectStore('vehiculos').put(n);t.oncomplete=ok;t.onerror=()=>mal(t.error);});
+  if(evUrl){URL.revokeObjectURL(evUrl);evUrl=null;}
+  aviso('Cambios guardados en '+x.id);await refrescarPantalla(volverEdit);
+};
+$('evBorrar').onclick=async()=>{
+  const x=ev.reg;
+  if(!confirm('¿Borrar el vehículo '+x.id+' ('+x.barco+', '+rd(x.tarifa)+')?\n\nNo se puede deshacer. Su número no se vuelve a usar.'))return;
+  await new Promise((ok,mal)=>{const t=db.transaction('vehiculos','readwrite');t.objectStore('vehiculos').delete(x.num);t.oncomplete=ok;t.onerror=()=>mal(t.error);});
+  if(evUrl){URL.revokeObjectURL(evUrl);evUrl=null;}
+  aviso(x.id+' borrado');await refrescarPantalla(volverEdit);
+};
+
+// ---------- Resumen del mes ----------
+let mesY=0,mesM=0,rangoMes='mes';
+function marcarChipsMes(){document.querySelectorAll('#chipsMes .chip').forEach(c=>c.classList.toggle('sel',c.dataset.r===rangoMes));}
+function abrirMes(){const d=new Date();mesY=d.getFullYear();mesM=d.getMonth()+1;rangoMes='mes';marcarChipsMes();mostrar('pMes');pintarMes();}
+$('mMes').onclick=()=>{cerrarMenu();abrirMes();};
+$('volverInicio4').onclick=async()=>{mostrar('home');await pintar();};
+$('mesAnt').onclick=()=>{mesM--;if(mesM<1){mesM=12;mesY--;}pintarMes();};
+$('mesSig').onclick=()=>{mesM++;if(mesM>12){mesM=1;mesY++;}pintarMes();};
+document.querySelectorAll('#chipsMes .chip').forEach(c=>c.onclick=()=>{rangoMes=c.dataset.r;marcarChipsMes();pintarMes();});
+async function pintarMes(){
+  const v=await todos('vehiculos'),g=await todos('gaseos'),bs=await todos('barcos');
+  const hoy=new Date();
+  $('mesSig').disabled=(mesY>hoy.getFullYear()||(mesY===hoy.getFullYear()&&mesM>=hoy.getMonth()+1));
+  const nombreMes=new Date(mesY,mesM-1,1).toLocaleDateString('es-DO',{month:'long',year:'numeric'});
+  $('tituloMes').textContent=nombreMes.charAt(0).toUpperCase()+nombreMes.slice(1);
+  const pre=mesY+'-'+String(mesM).padStart(2,'0')+'-';
+  const enRango=iso=>{const k=claveDia(iso);if(!k.startsWith(pre))return false;const d=Number(k.slice(8));return rangoMes==='mes'||(rangoMes==='q1'?d<=15:d>=16);};
+  const vm=v.filter(x=>enRango(x.fecha)),gm=g.filter(y=>enRango(y.fecha)).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const c=$('mesCont');c.innerHTML='';
+  const fila=(box,a,b,bold)=>{const f=el('div','lin');f.appendChild(el('span','',a));f.appendChild(el(bold?'b':'span','',b));box.appendChild(f);};
+
+  // Vehículos por tipo (cada tipo con su propio dinero)
+  const b1=el('div','caja');b1.style.marginTop='0';
+  const h1=el('div');h1.appendChild(el('b','gran',String(vm.length)));h1.append(vm.length===1?' vehículo':' vehículos');b1.appendChild(h1);
+  if(!vm.length)b1.appendChild(el('small','','Sin vehículos en este período'));
+  const l1=el('div','lineas');
+  for(const t of nombresTiposData(v,bs)){
+    const mv=vm.filter(x=>x.barco===t);if(!mv.length)continue;
+    fila(l1,t+' · '+mv.length+(mv.length===1?' vehículo':' vehículos'),rd(mv.reduce((s,x)=>s+x.tarifa,0)),true);
+    const por={};mv.forEach(x=>por[x.tarifa]=(por[x.tarifa]||0)+1);
+    const ks=Object.keys(por).sort((a,b)=>a-b);
+    if(ks.length>1)l1.appendChild(el('div','sub',ks.map(k=>por[k]+' × '+rd(Number(k))).join('  ·  ')));
+  }
+  b1.appendChild(l1);c.appendChild(b1);
+
+  // Gaseo
+  const b2=el('div','caja');
+  const h2=el('div');h2.appendChild(el('b','','Gaseo'));h2.append(' · '+gm.length+(gm.length===1?' día':' días'));b2.appendChild(h2);
+  if(!gm.length)b2.appendChild(el('small','','Sin gaseos en este período'));
+  else{
+    const l2=el('div','lineas');
+    fila(l2,'Total del gaseo',rd(gm.reduce((s,y)=>s+y.monto,0)),true);
+    gm.forEach(y=>{const [yy,mm,dd]=claveDia(y.fecha).split('-').map(Number);
+      fila(l2,new Date(yy,mm-1,dd).toLocaleDateString('es-DO',{weekday:'short',day:'numeric',month:'short'}),rd(y.monto),false);});
+    b2.appendChild(l2);
+  }
+  c.appendChild(b2);
+
+  // Vehículos por barco
+  const b3=el('div','caja');b3.appendChild(el('b','','Por barco'));
+  const grupos={};
+  vm.forEach(x=>{const k=x.barcoId||0;(grupos[k]=grupos[k]||[]).push(x);});
+  const ids=Object.keys(grupos).map(Number).sort((a,b)=>b-a);
+  if(!ids.length)b3.appendChild(el('div','vacio','Sin barcos en este período'));
+  for(const id of ids){
+    const arr=grupos[id],bar=bs.find(b=>b.bid===id);
+    const t=el('div','tarjeta'+(bar?' click':''));
+    const izq=el('div');
+    izq.appendChild(el('b','',bar?bar.tipo:'Sin barco'));
+    if(bar)izq.appendChild(el('small','','Código: '+(bar.codigoBarras||bar.codigoNum||'—')));
+    izq.appendChild(el('small','',arr.length+(arr.length===1?' vehículo':' vehículos')));
+    t.appendChild(izq);t.appendChild(el('b','',rd(arr.reduce((s,x)=>s+x.tarifa,0))));
+    if(bar)t.onclick=()=>verDetalle(id,'mes');
+    b3.appendChild(t);
+  }
+  c.appendChild(b3);
+}
+
 // ---------- Configuración (tipos de trabajo y montos) ----------
 function normalizarCfg(c){
   if(!c||!Array.isArray(c.tipos)||!c.tipos.length)return null;
@@ -662,9 +867,13 @@ function normalizarCfg(c){
     opciones:Array.isArray(t.opciones)?t.opciones.filter(n=>n>0):[],activo:t.activo!==false}));
   if(!tipos.length)return null;
   const gm=Array.isArray(c.gaseoMontos)&&c.gaseoMontos.length?c.gaseoMontos.filter(n=>n>0):CFG_DEFECTO.gaseoMontos.slice();
-  return {tipos,gaseoMontos:gm};
+  return {tipos,gaseoMontos:gm,chofer:(typeof c.chofer==='string'?c.chofer.trim().slice(0,40):'')};
 }
-async function cargarConfig(){const c=normalizarCfg(await getMeta('config'));if(c)cfg=c;}
+async function cargarConfig(){const c=normalizarCfg(await getMeta('config'));if(c)cfg=c;pintarQuien();}
+function pintarQuien(){$('quien').textContent=cfg.chofer?'👤 '+cfg.chofer:'👤 Toca aquí para poner tu nombre';}
+$('quien').onclick=()=>{pintarConfig();mostrar('pConfig');};
+function slugNombre(){return (cfg.chofer||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'');}
+$('guardarChofer').onclick=async()=>{cfg.chofer=$('choferIn').value.trim().slice(0,40);await guardarConfig();pintarQuien();aviso(cfg.chofer?'Nombre guardado':'Nombre borrado');};
 function guardarConfig(){return setMeta('config',cfg);}
 function cfgTipo(n){return cfg.tipos.find(t=>t.nombre===n)||{nombre:n,tarifa:null,opciones:[],activo:false};}
 function nombresTiposData(v,bs){
@@ -690,6 +899,7 @@ function pintarConfig(){
     f.appendChild(izq);f.appendChild(el('small','','Editar ›'));f.onclick=()=>abrirEditTipo(i);c.appendChild(f);
   });
   $('gaseoMontosIn').value=cfg.gaseoMontos.join(', ');vincularPrev('gaseoMontosIn','gaseoPrev');
+  $('choferIn').value=cfg.chofer||'';
 }
 $('mConfig').onclick=()=>{cerrarMenu();pintarConfig();mostrar('pConfig');};
 $('volverInicio3').onclick=async()=>{mostrar('home');await pintar();};
@@ -810,9 +1020,9 @@ async function crearRespaldo(){
     if(x.foto){const ext=((x.foto.type||'image/jpeg').split('/')[1]||'jpg').replace('jpeg','jpg');
       r.fotoArchivo='fotos/'+x.id+'.'+ext;archivos.push({nombre:r.fotoArchivo,blob:x.foto});}
     return r;});
-  const data={app:'patio',version:1,fecha:new Date().toISOString(),contador:cont||0,config:cfg,vehiculos:vs,barcos:bs,gaseos:g};
+  const data={app:'patio',version:1,fecha:new Date().toISOString(),contador:cont||0,chofer:cfg.chofer||'',config:cfg,vehiculos:vs,barcos:bs,gaseos:g};
   archivos.unshift({nombre:'data.json',blob:new Blob([JSON.stringify(data)],{type:'application/json'})});
-  return {blob:await hacerZip(archivos),nombre:'patio-respaldo-'+hoyTxt()+'.zip',fecha:data.fecha};
+  return {blob:await hacerZip(archivos),nombre:'patio-respaldo-'+(slugNombre()?slugNombre()+'-':'')+hoyTxt()+'.zip',fecha:data.fecha};
 }
 function descargar(blob,nombre){
   const u=URL.createObjectURL(blob);const a=document.createElement('a');
@@ -841,20 +1051,20 @@ async function crearExcel(){
   const tipos=nombresTiposData(v,bs);
   // Resumen por día
   const dias=[...new Set([...v.map(x=>claveDia(x.fecha)),...g.map(y=>claveDia(y.fecha))])].sort().reverse();
-  const resumen=[['Fecha',...tipos.map(t=>t+' (cant.)'),...tipos.map(t=>t+' RD$'),'Gaseo RD$']];
+  const resumen=[['Fecha',...tipos.map(t=>t+' (cant.)'),...tipos.map(t=>t+' RD$'),'Gaseo RD$','Chofer']];
   for(const k of dias){const r=resumenDia(v,g,k);
-    resumen.push([k,...tipos.map(t=>(r.tipos[t]||{n:0}).n),...tipos.map(t=>(r.tipos[t]||{monto:0}).monto),r.gaseo]);}
-  const veh=[['ID','Fecha','Hora','Tipo','Código del barco','Tarifa RD$','Chasis','Foto']];
-  v.forEach(x=>veh.push([x.id,claveDia(x.fecha),horaTxt(x.fecha),x.barco,x.codigo||'',x.tarifa,x.chasis||'',x.foto?'Sí':'No']));
-  const gas=[['Fecha','Monto RD$']];g.forEach(y=>gas.push([claveDia(y.fecha),y.monto]));
-  const bar=[['Tipo','Código de barras','Código numérico','Estado','Abierto el','Cerrado el','Vehículos','Total RD$']];
+    resumen.push([k,...tipos.map(t=>(r.tipos[t]||{n:0}).n),...tipos.map(t=>(r.tipos[t]||{monto:0}).monto),r.gaseo,cfg.chofer||'']);}
+  const veh=[['ID','Fecha','Hora','Tipo','Código del barco','Tarifa RD$','Chasis','Foto','Chofer']];
+  v.forEach(x=>veh.push([x.id,claveDia(x.fecha),horaTxt(x.fecha),x.barco,x.codigo||'',x.tarifa,x.chasis||'',x.foto?'Sí':'No',cfg.chofer||'']));
+  const gas=[['Fecha','Monto RD$','Chofer']];g.forEach(y=>gas.push([claveDia(y.fecha),y.monto,cfg.chofer||'']));
+  const bar=[['Tipo','Código de barras','Código numérico','Estado','Abierto el','Cerrado el','Vehículos','Total RD$','Chofer']];
   bs.forEach(b=>{const m=v.filter(x=>x.barcoId===b.bid);
-    bar.push([b.tipo,b.codigoBarras||'',b.codigoNum||'',b.abierto?'Abierto':'Cerrado',claveDia(b.fecha),b.cierre?claveDia(b.cierre):'',m.length,m.reduce((s,x)=>s+x.tarifa,0)]);});
+    bar.push([b.tipo,b.codigoBarras||'',b.codigoNum||'',b.abierto?'Abierto':'Cerrado',claveDia(b.fecha),b.cierre?claveDia(b.cierre):'',m.length,m.reduce((s,x)=>s+x.tarifa,0),cfg.chofer||'']);});
   const hojas=[
-    ['Resumen por día',resumen,[12,...tipos.map(()=>18),...tipos.map(()=>16),12]],
-    ['Vehículos',veh,[9,12,8,16,20,12,24,7]],
-    ['Gaseos',gas,[12,12]],
-    ['Barcos',bar,[16,20,18,10,12,12,10,12]]
+    ['Resumen por día',resumen,[12,...tipos.map(()=>18),...tipos.map(()=>16),12,20]],
+    ['Vehículos',veh,[9,12,8,16,20,12,24,7,20]],
+    ['Gaseos',gas,[12,12,20]],
+    ['Barcos',bar,[16,20,18,10,12,12,10,12,20]]
   ];
   const NS='xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"';
   const T=(n,t)=>({nombre:n,blob:new Blob([t],{type:'application/xml'})});
@@ -870,7 +1080,7 @@ async function crearExcel(){
     T('xl/styles.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet '+NS+'><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>')
   ];
   hojas.forEach((h,i)=>arch.push(T('xl/worksheets/sheet'+(i+1)+'.xml',hojaXML(h[1],h[2]))));
-  return {blob:await hacerZip(arch,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),nombre:'patio-excel-'+hoyTxt()+'.xlsx'};
+  return {blob:await hacerZip(arch,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),nombre:'patio-excel-'+(slugNombre()?slugNombre()+'-':'')+hoyTxt()+'.xlsx'};
 }
 
 // --- Pantalla de respaldo ---
@@ -878,8 +1088,9 @@ let respaldoListo=null,ocupado=false;
 async function pintarResp(){
   const v=await todos('vehiculos'),g=await todos('gaseos');
   const ult=await getMeta('ultimoRespaldo');
-  const pend=v.filter(x=>!ult||x.fecha>ult).length+g.filter(y=>!ult||y.fecha>ult).length;
+  const pend=v.filter(x=>!ult||(x.editadoEn||x.fecha)>ult).length+g.filter(y=>!ult||y.fecha>ult).length;
   const e=$('estadoResp');e.innerHTML='';
+  if(cfg.chofer){const lc=el('div');lc.appendChild(el('b','','Chofer: '));lc.append(cfg.chofer);e.appendChild(lc);}
   const l1=el('div');l1.appendChild(el('b','','Último respaldo: '));
   l1.append(ult?fmt(ult):'todavía no has hecho ninguno');e.appendChild(l1);
   e.appendChild(el('div','',pend+(pend===1?' registro sin respaldar':' registros sin respaldar')));
@@ -922,7 +1133,8 @@ $('archivoResp').onchange=async e=>{
     if(data.app!=='patio'||!Array.isArray(data.vehiculos))throw new Error('x');
   }catch(err){aviso('Ese archivo no es un respaldo válido de esta app');return;}
   const actuales=(await todos('vehiculos')).length;
-  if(!confirm('Este respaldo es del '+fmt(data.fecha)+' y tiene '+data.vehiculos.length+' vehículos, '+(data.barcos||[]).length+' barcos y '+(data.gaseos||[]).length+' gaseos.\n\nVa a REEMPLAZAR todo lo que hay ahora en este teléfono ('+actuales+' vehículos). ¿Continuar?'))return;
+  const otro=(data.chofer&&cfg.chofer&&data.chofer!==cfg.chofer)?'⚠ OJO: este respaldo es de otra persona ('+data.chofer+').\n\n':'';
+  if(!confirm(otro+'Este respaldo'+(data.chofer?' de '+data.chofer:'')+' es del '+fmt(data.fecha)+' y tiene '+data.vehiculos.length+' vehículos, '+(data.barcos||[]).length+' barcos y '+(data.gaseos||[]).length+' gaseos.\n\nVa a REEMPLAZAR todo lo que hay ahora en este teléfono ('+actuales+' vehículos). ¿Continuar?'))return;
   ocupado=true;aviso('Restaurando…');
   try{
     const vs=[];
@@ -947,7 +1159,7 @@ $('archivoResp').onchange=async e=>{
       t.objectStore('meta').put({k:'config',v:cfgNuevo});
       t.oncomplete=ok;t.onerror=()=>mal(t.error);
     });
-    cfg=cfgNuevo;aviso('Listo: '+vs.length+' vehículos restaurados');await pintarResp();
+    cfg=cfgNuevo;pintarQuien();aviso('Listo: '+vs.length+' vehículos restaurados');await pintarResp();
   }catch(err){aviso('No se pudo restaurar: '+(err&&err.message?err.message:err));}
   finally{ocupado=false;}
 };
@@ -971,7 +1183,8 @@ function marcarChip(){document.querySelectorAll('#chips .chip').forEach(c=>c.cla
 document.querySelectorAll('#chips .chip').forEach(c=>c.onclick=()=>{filtro=c.dataset.f;marcarChip();pintarBarcos();});
 $('buscarBarco').oninput=()=>pintarBarcos();
 $('volverBarcos').onclick=async()=>{
-  if(origenDetalle==='home'){mostrar('home');await pintar();}
+  if(origenDetalle==='mes'){mostrar('pMes');await pintarMes();}
+  else if(origenDetalle==='home'){mostrar('home');await pintar();}
   else{mostrar('pBarcos');await pintarBarcos();}
 };
 $('volverHist').onclick=async()=>{mostrar('pHist');await pintarHist();};
@@ -1031,11 +1244,11 @@ async function pintarBarcos(){
 }
 
 async function verDetalle(bid,desde){
-  origenDetalle=desde||'carpeta';
+  origenDetalle=desde||'carpeta';detalleBid=bid;
   const b=(await todos('barcos')).find(x=>x.bid===bid);if(!b)return;
   const v=(await todos('vehiculos')).filter(x=>x.barcoId===bid).sort((a,b)=>b.num-a.num);
   urls.forEach(u=>URL.revokeObjectURL(u));urls=[];
-  $('volverBarcos').textContent=origenDetalle==='home'?'← Inicio':'← '+b.tipo;
+  $('volverBarcos').textContent=origenDetalle==='home'?'← Inicio':origenDetalle==='mes'?'← Resumen del mes':'← '+b.tipo;
   const d=$('detalle');d.innerHTML='';
   const caja=el('div','caja');caja.style.marginTop='0';
   const h=el('h2','',b.tipo);h.style.fontSize='1.3rem';
