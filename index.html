@@ -114,8 +114,10 @@
 <div id="home">
   <button id="agregar">Agregar vehículo</button>
   <button id="nuevoBarco">+ Nuevo barco</button>
-  <button id="btnGaseo" class="sec2">Registrar gaseo</button>
+  <button id="btnGaseo" class="sec2">▶ Iniciar gaseo</button>
   <div class="caja" id="resumen"></div>
+
+  <div id="gaseoCurso" class="caja" style="display:none;margin-top:0;margin-bottom:14px;border:2px solid var(--verde)"></div>
 
   <h2>Barcos abiertos</h2>
   <div id="abiertos" class="caja" style="margin-top:0"></div>
@@ -280,14 +282,17 @@
 </section>
 
 <section id="formGaseo" class="caja secc">
-  <h2>Gaseo</h2>
-  <label for="gFecha">Fecha</label>
-  <input type="date" id="gFecha" style="width:100%;padding:14px;font-size:1.05rem;border:2px solid var(--linea);border-radius:12px;background:#fff;margin-bottom:14px">
+  <h2 id="gTitulo" style="font-size:1.2rem">Gaseo</h2>
+  <label for="gInicio">Hora de inicio</label>
+  <input type="datetime-local" id="gInicio" style="width:100%;padding:14px;font-size:1.05rem;border:2px solid var(--linea);border-radius:12px;background:#fff;margin-bottom:6px">
+  <label for="gFin">Hora de fin</label>
+  <input type="datetime-local" id="gFin" style="width:100%;padding:14px;font-size:1.05rem;border:2px solid var(--linea);border-radius:12px;background:#fff;margin-bottom:6px">
+  <p id="gDur" style="color:var(--gris);font-weight:600;margin:4px 0 14px"></p>
   <h2>¿Cuánto pagan?</h2>
   <div class="grid3" id="montosG"></div>
   <label for="gMonto">Otro monto</label>
   <input type="number" id="gMonto" inputmode="numeric" min="0" placeholder="Escribe el monto">
-  <button id="guardarGaseo" class="principal" disabled>Guardar gaseo</button>
+  <button id="guardarGaseo" class="principal">Guardar gaseo</button>
   <button id="cancelarGaseo" class="cancelar">Cancelar</button>
 </section>
 
@@ -556,6 +561,23 @@ async function pintar(){
   const bs=(await todos('barcos')).sort((a,b)=>b.bid-a.bid);
   abiertos=bs.filter(b=>b.abierto);
   const g=await todos('gaseos');
+  {
+    const ga=g.find(y=>y.abierto);
+    $('btnGaseo').style.display=ga?'none':'';
+    const gc=$('gaseoCurso');gc.innerHTML='';gaseoInicioAbierto=ga?(ga.inicio||ga.fecha):null;
+    if(ga){
+      gc.style.display='block';
+      gc.appendChild(el('b','','Gaseo en curso'));
+      const l1=el('div');l1.style.margin='4px 0 0';l1.appendChild(el('small','','Inicio: '+fmtLargo(ga.inicio||ga.fecha)));gc.appendChild(l1);
+      const ll=el('div','',' ');ll.id='gaseoLleva';ll.style.fontWeight='700';ll.style.fontSize='1.2rem';gc.appendChild(ll);
+      const bt=el('button','principal','■ Terminar gaseo');bt.style.marginTop='12px';bt.onclick=()=>abrirFormGaseo('terminar',ga);gc.appendChild(bt);
+      const fila=el('div');fila.style.display='flex';fila.style.justifyContent='space-between';
+      const bc=el('button','cerrar','Corregir hora');bc.onclick=()=>abrirFormGaseo('editar',ga);
+      const bb=el('button','borrar','Borrar');bb.onclick=async()=>{if(confirm('¿Borrar el gaseo en curso?')){await borrarGaseoDB(ga.gid);await pintar();}};
+      fila.appendChild(bc);fila.appendChild(bb);gc.appendChild(fila);
+      actualizarLleva();
+    }else gc.style.display='none';
+  }
   const rs=resumenDia(v,g,claveDia(new Date().toISOString()));
   const rc=$('resumen');rc.innerHTML='';
   const tt=el('div');tt.appendChild(el('b','','Hoy'));tt.append(' · '+rs.n+(rs.n===1?' vehículo':' vehículos'));rc.appendChild(tt);
@@ -633,28 +655,89 @@ function etiquetaDia(k){
   return new Date(y,m-1,d).toLocaleDateString('es-DO',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
 }
 
-// ---------- Gaseo ----------
+// ---------- Gaseo (con hora de inicio y fin) ----------
+function putGaseo(reg){return new Promise((ok,mal)=>{const t=db.transaction('gaseos','readwrite');t.objectStore('gaseos').put(reg);t.oncomplete=ok;t.onerror=()=>mal(t.error);});}
+function duracion(a,b){
+  const m=Math.max(0,Math.round((new Date(b)-new Date(a))/60000)),h=Math.floor(m/60),mm=m%60;
+  return h?(h+' h'+(mm?' '+mm+' min':'')):(mm+' min');
+}
+function textoHorasGaseo(y){
+  if(!y.inicio)return '';
+  if(y.abierto||!y.fin)return 'Inicio '+fmtLargo(y.inicio)+' · en curso';
+  const mismo=claveDia(y.inicio)===claveDia(y.fin);
+  return (mismo?horaTxt(y.inicio)+' – '+horaTxt(y.fin):fmtLargo(y.inicio)+' → '+fmtLargo(y.fin))+' · '+duracion(y.inicio,y.fin);
+}
+function aInput(iso){const d=new Date(iso),z=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())+'T'+z(d.getHours())+':'+z(d.getMinutes());}
+function deInput(v){return v?new Date(v).toISOString():null;}
+let gaseoInicioAbierto=null;
+function actualizarLleva(){const e=$('gaseoLleva');if(e&&gaseoInicioAbierto)e.textContent='Lleva '+duracion(gaseoInicioAbierto,new Date().toISOString());}
+setInterval(actualizarLleva,30000);
+
+function filaGaseo(y,titulo,refrescar){
+  const li=el('li','click');
+  const izq=el('div');izq.appendChild(el('b','',titulo));
+  const hs=textoHorasGaseo(y);if(hs)izq.appendChild(el('small','',hs));
+  li.appendChild(izq);
+  const der=el('div');der.style.textAlign='right';
+  der.appendChild(el('b','',y.abierto?'En curso':rd(y.monto)));
+  const bb=el('button','borrar','Borrar');
+  bb.onclick=async e=>{e.stopPropagation();if(confirm('¿Borrar este gaseo'+(y.abierto?'':' de '+rd(y.monto))+'?')){await borrarGaseoDB(y.gid);await refrescar();}};
+  der.appendChild(bb);li.appendChild(der);
+  li.onclick=()=>abrirFormGaseo('editar',y);
+  return li;
+}
+
 function marcarMontoG(){
   const val=Number($('gMonto').value);
   document.querySelectorAll('#montosG .op').forEach(b=>b.classList.toggle('sel',Number(b.dataset.m)===val));
-  $('guardarGaseo').disabled=!(val>0);
 }
 function dibujarMontosG(){
   const c=$('montosG');c.innerHTML='';
   cfg.gaseoMontos.forEach(m=>{const b=el('button','op',rd(m));b.dataset.m=m;b.onclick=()=>{$('gMonto').value=m;marcarMontoG();};c.appendChild(b);});
 }
 $('gMonto').oninput=marcarMontoG;
-$('btnGaseo').onclick=()=>{$('gFecha').value=claveDia(new Date().toISOString());$('gMonto').value='';dibujarMontosG();marcarMontoG();mostrar('formGaseo');};
-$('cancelarGaseo').onclick=()=>mostrar('home');
+function gDurTxt(){const a=deInput($('gInicio').value),b=deInput($('gFin').value);$('gDur').textContent=(a&&b&&new Date(b)>=new Date(a))?'Duración: '+duracion(a,b):'';}
+$('gInicio').oninput=gDurTxt;$('gFin').oninput=gDurTxt;
+
+let gModo='nuevo',gRec=null,volverGaseo='home';
+function abrirFormGaseo(modo,rec){
+  gModo=modo;gRec=rec||null;volverGaseo=pantallaActual;
+  $('gTitulo').textContent=modo==='terminar'?'Terminar gaseo':modo==='editar'?'Corregir gaseo':'Registrar gaseo pasado';
+  $('gInicio').value=rec&&rec.inicio?aInput(rec.inicio):'';
+  $('gFin').value=modo==='terminar'?aInput(new Date().toISOString()):(rec&&rec.fin?aInput(rec.fin):'');
+  $('gMonto').value=rec&&rec.monto>0?rec.monto:'';
+  $('guardarGaseo').textContent=modo==='terminar'?'Terminar y guardar':'Guardar gaseo';
+  dibujarMontosG();marcarMontoG();gDurTxt();mostrar('formGaseo');
+}
+$('btnGaseo').onclick=async()=>{
+  const ahora=new Date().toISOString(),hoy=claveDia(ahora);
+  const previos=(await todos('gaseos')).filter(y=>claveDia(y.fecha)===hoy&&!y.abierto);
+  const aviso2=previos.length?'Ya hay un gaseo hoy ('+rd(previos[0].monto)+').\n\n':'';
+  if(!confirm(aviso2+'¿Iniciar el gaseo ahora? Hora de inicio: '+horaTxt(ahora)))return;
+  await guardarGaseo({fecha:ahora,inicio:ahora,fin:null,monto:0,abierto:true,sincronizado:false});
+  aviso('Gaseo iniciado a las '+horaTxt(ahora));await pintar();
+};
+$('cancelarGaseo').onclick=()=>refrescarPantalla(volverGaseo);
 $('guardarGaseo').onclick=async()=>{
-  const monto=Number($('gMonto').value);const f=$('gFecha').value;
-  if(!(monto>0)||!f){aviso('Pon la fecha y el monto');return;}
-  const existentes=(await todos('gaseos')).filter(y=>claveDia(y.fecha)===f);
-  if(existentes.length&&!confirm('Ya hay un gaseo ese día ('+rd(existentes[0].monto)+'). ¿Agregar otro?'))return;
-  const [y,m,d]=f.split('-').map(Number);
-  const iso=f===claveDia(new Date().toISOString())?new Date().toISOString():new Date(y,m-1,d,12,0,0).toISOString();
-  await guardarGaseo({fecha:iso,monto,sincronizado:false});
-  mostrar('home');aviso('Gaseo guardado: '+rd(monto));await pintar();
+  const ini=deInput($('gInicio').value),fin=deInput($('gFin').value),monto=Number($('gMonto').value)||0;
+  const abierto0=gRec&&gRec.abierto,legacy=gRec&&!gRec.inicio&&!gRec.abierto;
+  if(gModo==='nuevo'||gModo==='terminar'){if(!ini||!fin){aviso('Pon la hora de inicio y la hora de fin');return;}}
+  else if(abierto0){if(!ini){aviso('Pon la hora de inicio');return;}}
+  else if(legacy){if((ini&&!fin)||(!ini&&fin)){aviso('Pon las dos horas, o déjalas vacías');return;}}
+  else if(!ini||!fin){aviso('Pon la hora de inicio y la hora de fin');return;}
+  if(fin){
+    if(new Date(fin)<new Date(ini)){aviso('La hora de fin no puede ser antes del inicio');return;}
+    if(!(monto>0)){aviso('Pon cuánto pagan por este gaseo');return;}
+  }else if(!abierto0&&!legacy){aviso('Pon la hora de fin');return;}
+  else if(legacy&&!(monto>0)){aviso('Pon cuánto pagan por este gaseo');return;}
+  const base=gRec?Object.assign({},gRec):{sincronizado:false};
+  const reg=Object.assign(base,{monto,editadoEn:new Date().toISOString(),sincronizado:false});
+  if(ini){reg.inicio=ini;reg.fecha=ini;reg.fin=fin||null;reg.abierto=!fin;}
+  else if(gRec&&gRec.fecha){reg.fecha=gRec.fecha;}
+  if(gModo==='nuevo')delete reg.editadoEn;
+  if(gRec)await putGaseo(reg);else await guardarGaseo(reg);
+  aviso(fin?'Gaseo guardado: '+rd(monto)+' · '+duracion(ini,fin):'Gaseo actualizado');
+  await refrescarPantalla(volverGaseo);
 };
 
 // ---------- Historial por fecha ----------
@@ -708,13 +791,7 @@ async function pintarHist(){
     const t=el('div');t.appendChild(el('b','',etiquetaDia(k)));t.append(' · '+r.n+(r.n===1?' vehículo':' vehículos'));
     h.appendChild(t);h.appendChild(lineasResumen(r));c.appendChild(h);
     const ul=el('ul');
-    for(const y of g.filter(y=>claveDia(y.fecha)===k)){
-      const li=el('li');li.appendChild(el('b','','Gaseo'));
-      const der=el('div');der.appendChild(el('b','',rd(y.monto)));
-      const bb=el('button','borrar','Borrar');
-      bb.onclick=async()=>{if(confirm('¿Borrar el gaseo de '+rd(y.monto)+'?')){await borrarGaseoDB(y.gid);await pintarHist();}};
-      der.appendChild(bb);li.appendChild(der);ul.appendChild(li);
-    }
+    for(const y of g.filter(y=>claveDia(y.fecha)===k))ul.appendChild(filaGaseo(y,'Gaseo',pintarHist));
     v.filter(x=>claveDia(x.fecha)===k).forEach(x=>ul.appendChild(filaVeh(x,true)));
     c.appendChild(ul);
   }
@@ -1084,7 +1161,7 @@ async function pintarMes(){
     const l2=el('div','lineas');
     fila(l2,'Total del gaseo',rd(gm.reduce((s,y)=>s+y.monto,0)),true);
     gm.forEach(y=>{const [yy,mm,dd]=claveDia(y.fecha).split('-').map(Number);
-      fila(l2,new Date(yy,mm-1,dd).toLocaleDateString('es-DO',{weekday:'short',day:'numeric',month:'short'}),rd(y.monto),false);});
+      fila(l2,new Date(yy,mm-1,dd).toLocaleDateString('es-DO',{weekday:'short',day:'numeric',month:'short'}),y.abierto?'En curso':rd(y.monto),false);const hs=textoHorasGaseo(y);if(hs)l2.appendChild(el('div','sub',hs));});
     b2.appendChild(l2);
   }
   c.appendChild(b2);
@@ -1307,14 +1384,14 @@ async function crearExcel(){
   const nomDe=id=>{const y=bs.find(z=>z.bid===id);return (y&&y.nombre)||'';};
   const veh=[['ID','Fecha','Hora','Tipo','Nombre del buque','Código del barco','Tarifa RD$','Chasis','Foto','Chofer']];
   v.forEach(x=>veh.push([x.id,claveDia(x.fecha),horaTxt(x.fecha),x.barco,nomDe(x.barcoId),x.codigo||'',x.tarifa,x.chasis||'',x.foto?'Sí':'No',cfg.chofer||'']));
-  const gas=[['Fecha','Monto RD$','Chofer']];g.forEach(y=>gas.push([claveDia(y.fecha),y.monto,cfg.chofer||'']));
+  const gas=[['Fecha','Hora inicio','Fecha fin','Hora fin','Duración','Monto RD$','Chofer']];g.forEach(y=>gas.push([claveDia(y.fecha),y.inicio?horaTxt(y.inicio):'',y.fin?claveDia(y.fin):'',y.fin?horaTxt(y.fin):(y.abierto?'En curso':''),(y.inicio&&y.fin)?duracion(y.inicio,y.fin):'',y.monto,cfg.chofer||'']));
   const bar=[['Tipo','Nombre del buque','Código de barras','Código numérico','Estado','Abierto el','Cerrado el','Vehículos','Total RD$','Chofer']];
   bs.forEach(b=>{const m=v.filter(x=>x.barcoId===b.bid);
     bar.push([b.tipo,b.nombre||'',b.codigoBarras||'',b.codigoNum||'',b.abierto?'Abierto':'Cerrado',claveDia(b.fecha),b.cierre?claveDia(b.cierre):'',m.length,m.reduce((s,x)=>s+x.tarifa,0),cfg.chofer||'']);});
   const hojas=[
     ['Resumen por día',resumen,[12,...tipos.map(()=>18),...tipos.map(()=>16),12,20]],
     ['Vehículos',veh,[9,12,8,16,20,20,12,24,7,20]],
-    ['Gaseos',gas,[12,12,20]],
+    ['Gaseos',gas,[12,12,12,10,12,12,20]],
     ['Barcos',bar,[16,20,20,18,10,12,12,10,12,20]]
   ];
   const NS='xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"';
@@ -1339,7 +1416,7 @@ let respaldoListo=null,ocupado=false;
 async function pintarResp(){
   const v=await todos('vehiculos'),g=await todos('gaseos');
   const ult=await getMeta('ultimoRespaldo');
-  const pend=v.filter(x=>!ult||(x.editadoEn||x.fecha)>ult).length+g.filter(y=>!ult||y.fecha>ult).length;
+  const pend=v.filter(x=>!ult||(x.editadoEn||x.fecha)>ult).length+g.filter(y=>!ult||(y.editadoEn||y.fecha)>ult).length;
   const e=$('estadoResp');e.innerHTML='';
   if(cfg.chofer){const lc=el('div');lc.appendChild(el('b','','Chofer: '));lc.append(cfg.chofer);e.appendChild(lc);}
   const l1=el('div');l1.appendChild(el('b','','Último respaldo: '));
@@ -1452,16 +1529,11 @@ async function pintarBarcos(){
   const cc=$('listaBarcos');
   if(carpetaActual==='Gaseo'){
     cc.innerHTML='';
+    const nb=el('button','sec2','+ Registrar gaseo pasado');nb.style.marginTop='0';nb.style.marginBottom='8px';nb.onclick=()=>abrirFormGaseo('nuevo',null);cc.appendChild(nb);
     const gs=(await todos('gaseos')).sort((a,b)=>b.fecha.localeCompare(a.fecha));
     if(!gs.length)cc.appendChild(el('div','vacio','Todavía no hay gaseos.'));
     const ul=el('ul');
-    for(const y of gs){
-      const li=el('li');li.appendChild(el('b','',etiquetaDia(claveDia(y.fecha))));
-      const der=el('div');der.appendChild(el('b','',rd(y.monto)));
-      const bb=el('button','borrar','Borrar');
-      bb.onclick=async()=>{if(confirm('¿Borrar el gaseo de '+rd(y.monto)+'?')){await borrarGaseoDB(y.gid);await pintarBarcos();}};
-      der.appendChild(bb);li.appendChild(der);ul.appendChild(li);
-    }
+    for(const y of gs)ul.appendChild(filaGaseo(y,etiquetaDia(claveDia(y.fecha)),pintarBarcos));
     cc.appendChild(ul);return;
   }
   if(carpetaActual==='Sin barco'){
